@@ -20,6 +20,9 @@ export interface ReceiptData {
   clientFullName: string;
   clientIdType: string;
   clientIdNumber: string;
+  collectedByFullName: string | null;
+  collectedByIdType: string | null;
+  collectedByIdNumber: string | null;
   amountReceived: string;
   receivedCurrency: string;
   feePercentApplied: string;
@@ -55,6 +58,19 @@ export function ReceiptTicket({ data, copyLabel }: { data: ReceiptData; copyLabe
         <Row label="Pièce" value={`${ID_TYPE_LABEL[data.clientIdType] ?? data.clientIdType} ${data.clientIdNumber}`} />
       </div>
 
+      {data.collectedByFullName ? (
+        <>
+          <hr className="my-2 border-dashed border-neutral-400" />
+          <div className="space-y-0.5">
+            <Row label="Reçu par (procuration)" value={data.collectedByFullName} />
+            <Row
+              label="Pièce"
+              value={`${ID_TYPE_LABEL[data.collectedByIdType ?? ""] ?? data.collectedByIdType} ${data.collectedByIdNumber}`}
+            />
+          </div>
+        </>
+      ) : null}
+
       <hr className="my-2 border-dashed border-neutral-400" />
 
       <div className="space-y-0.5">
@@ -77,7 +93,7 @@ export function ReceiptTicket({ data, copyLabel }: { data: ReceiptData; copyLabe
       <Row label="Caissier" value={data.cashierFullName} />
 
       <div className="mt-6">
-        <p>Signature du client :</p>
+        <p>Signature {data.collectedByFullName ? "(procuration)" : "du client"} :</p>
         <p className="mt-6 border-t border-neutral-400" />
       </div>
     </div>

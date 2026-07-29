@@ -26,7 +26,7 @@ export default async function TransactionDetailPage({ params }: { params: Promis
 
   const transaction = await prisma.transaction.findUnique({
     where: { id },
-    include: { client: true, createdBy: { select: { fullName: true } } },
+    include: { client: true, collectedBy: true, createdBy: { select: { fullName: true } } },
   });
   if (!transaction) notFound();
 
@@ -36,8 +36,17 @@ export default async function TransactionDetailPage({ params }: { params: Promis
     ["Canal", CHANNEL_LABEL[transaction.channel]],
     ["Référence", transaction.externalRef],
     ["Expéditeur", transaction.senderName],
-    ["Bénéficiaire", transaction.client.fullName],
-    ["Pièce d'identité", `${ID_TYPE_LABEL[transaction.client.idType]} ${transaction.client.idNumber}`],
+    ["Bénéficiaire visé", transaction.client.fullName],
+    ["Pièce d'identité (bénéficiaire)", `${ID_TYPE_LABEL[transaction.client.idType]} ${transaction.client.idNumber}`],
+    ...(transaction.collectedBy
+      ? ([
+          ["Reçu par (procuration)", transaction.collectedBy.fullName],
+          [
+            "Pièce d'identité (procuration)",
+            `${ID_TYPE_LABEL[transaction.collectedBy.idType]} ${transaction.collectedBy.idNumber}`,
+          ],
+        ] as [string, string][])
+      : []),
     ["Montant reçu", `${AMOUNT_FORMATTER.format(Number(transaction.amountReceived))} ${transaction.receivedCurrency}`],
     ["Frais appliqués", `${transaction.feePercentApplied.toString()} %`],
     ["Taux appliqué", transaction.exchangeRateApplied?.toString() ?? "—"],

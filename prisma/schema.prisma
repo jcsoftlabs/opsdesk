@@ -108,7 +108,8 @@ model Client {
   createdById String
   createdBy   User   @relation("ClientCreatedBy", fields: [createdById], references: [id])
 
-  transactions Transaction[]
+  transactions          Transaction[] @relation("TransactionClient")
+  collectedTransactions Transaction[] @relation("TransactionCollectedBy")
 
   @@unique([idType, idNumber])
   @@map("clients")
@@ -143,7 +144,13 @@ model Transaction {
   senderName  String
 
   clientId String
-  client   Client @relation(fields: [clientId], references: [id])
+  client   Client @relation("TransactionClient", fields: [clientId], references: [id])
+
+  // Procuration (confirmé 2026-07-28) : la personne qui se présente au
+  // guichet et signe le reçu peut différer du bénéficiaire visé par
+  // l'expéditeur. Renseigné au moment du paiement (§7.4), pas à la création.
+  collectedById String?
+  collectedBy   Client? @relation("TransactionCollectedBy", fields: [collectedById], references: [id])
 
   amountReceived   Decimal  @db.Decimal(18, 2)
   receivedCurrency Currency
@@ -185,6 +192,7 @@ model Transaction {
   @@unique([channel, externalRef])
   @@index([status, createdAt])
   @@index([clientId])
+  @@index([collectedById])
   @@map("transactions")
 }
 

@@ -146,7 +146,8 @@ Transaction
   channel             ZELLE | CASHAPP | DEPOSIT_USD | TRANSFER_HTG
   externalRef         // référence/identifiant de la transaction Zelle/CashApp
   senderName          // l'expéditeur à l'étranger
-  clientId            // bénéficiaire
+  clientId            // bénéficiaire visé (désigné par l'expéditeur)
+  collectedById?       // procuration : qui a réellement retiré l'argent, si différent (§7.4)
   amountReceived      Decimal  // dans la devise d'entrée
   receivedCurrency    USD | HTG
   payoutCurrency      USD | HTG
@@ -268,7 +269,8 @@ Bouton **Enregistrer** → statut `RECEIVED`.
 - Écran listant les transactions en attente.
 - Bouton **Vérifié** (la caissière a confirmé la réception sur le compte Zelle/CashApp) → `VERIFIED`.
 - Bouton **Payer** → demande confirmation du montant, crée le `CashMovement` de sortie correspondant, passe en `PAID`, imprime le reçu.
-- **Le paiement est impossible si aucune session de caisse n'est ouverte pour l'utilisateur.**
+- **Procuration (confirmé 2026-07-28)** : case à cocher optionnelle « Retiré par quelqu'un d'autre ». Si cochée, saisie du nom + type/numéro de pièce de la personne qui se présente réellement au guichet (`Transaction.collectedById`, résolution find-or-create comme pour le bénéficiaire). Le reçu et la page de détail affichent alors le bénéficiaire visé **et** la personne ayant réellement retiré l'argent.
+- **Le paiement est impossible si aucune caisse commune n'est ouverte.**
 
 ### 7.5 Reçu
 - Format ticket 80 mm (imprimante thermique) **et** A5 PDF en repli.
@@ -360,7 +362,7 @@ Les phases 2 (services légaux) et 3 (produits et stock) ne sont **pas** dans ce
 2. Arrondi du montant remis en gourdes : à la gourde, ou à 5 HTG ?
 3. Existe-t-il un montant plafond au-delà duquel une validation du superviseur est requise ?
 4. La commission est-elle parfois négociée pour les gros montants ou les clients réguliers ? Si oui, il faut un champ de dérogation tracé et réservé au superviseur.
-5. Y a-t-il un cas où le bénéficiaire n'est pas la personne dont on prend la pièce (procuration) ?
+5. ~~Y a-t-il un cas où le bénéficiaire n'est pas la personne dont on prend la pièce (procuration) ?~~ **Confirmé 2026-07-28 : oui.** Voir §7.4.
 6. ~~Numéro de téléphone et nom exact de l'entreprise pour l'en-tête du reçu.~~ **Confirmé 2026-07-28 : Kmat Supply, +509 34 40 3636 / 36 00 1818.**
 7. Le fichier Excel actuel, pour écrire le script d'import.
 

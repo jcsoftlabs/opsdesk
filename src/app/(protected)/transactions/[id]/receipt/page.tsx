@@ -18,7 +18,7 @@ export default async function ReceiptPage({ params }: { params: Promise<{ id: st
 
   const transaction = await prisma.transaction.findUnique({
     where: { id },
-    include: { client: true, createdBy: { select: { fullName: true } } },
+    include: { client: true, collectedBy: true, createdBy: { select: { fullName: true } } },
   });
   if (!transaction) notFound();
 
@@ -31,6 +31,9 @@ export default async function ReceiptPage({ params }: { params: Promise<{ id: st
     clientFullName: transaction.client.fullName,
     clientIdType: transaction.client.idType,
     clientIdNumber: transaction.client.idNumber,
+    collectedByFullName: transaction.collectedBy?.fullName ?? null,
+    collectedByIdType: transaction.collectedBy?.idType ?? null,
+    collectedByIdNumber: transaction.collectedBy?.idNumber ?? null,
     amountReceived: transaction.amountReceived.toString(),
     receivedCurrency: transaction.receivedCurrency,
     feePercentApplied: transaction.feePercentApplied.toString(),
