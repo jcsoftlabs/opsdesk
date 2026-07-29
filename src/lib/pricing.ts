@@ -13,6 +13,16 @@ export const RECEIVED_CURRENCY_BY_CHANNEL: Record<Channel, Currency> = {
   TRANSFER_HTG: "HTG",
 };
 
+// Préfixe de la référence générée par le système (§7.3, confirmé 2026-07-28) :
+// le numéro de confirmation réel n'apparaît pas toujours dans les captures
+// d'écran (surtout CashApp), donc la référence n'est plus saisie à la main.
+export const CHANNEL_REF_PREFIX: Record<Channel, string> = {
+  ZELLE: "ZL",
+  CASHAPP: "CA",
+  DEPOSIT_USD: "DU",
+  TRANSFER_HTG: "VH",
+};
+
 export interface PricingRuleInput {
   channel: Channel;
   payoutCurrency: Currency;

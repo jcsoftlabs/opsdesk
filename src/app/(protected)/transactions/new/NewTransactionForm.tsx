@@ -6,7 +6,6 @@ import { AttachmentUploader, type UploadedAttachment } from "@/components/Attach
 import { calculatePricing, type Channel, type Currency } from "@/lib/pricing";
 import { ID_TYPE_LABEL } from "@/lib/idType";
 import {
-  checkExternalRefAction,
   createTransactionAction,
   getRecentSendersForClientAction,
   searchClientsAction,
@@ -41,13 +40,8 @@ export function NewTransactionForm({ activeRules }: { activeRules: ActiveRuleDTO
   const [state, formAction, pending] = useActionState(createTransactionAction, initialState);
 
   const [channel, setChannel] = useState<Channel | null>(null);
-  const [externalRef, setExternalRef] = useState("");
   const [amountReceived, setAmountReceived] = useState("");
   const [payoutCurrency, setPayoutCurrency] = useState<Currency | null>(null);
-
-  const [refCheck, setRefCheck] = useState<
-    { checking: boolean; exists: boolean; receiptNo?: string; transactionId?: string } | null
-  >(null);
 
   const [clientQuery, setClientQuery] = useState("");
   const [clientResults, setClientResults] = useState<ClientSearchResult[]>([]);
@@ -84,16 +78,7 @@ export function NewTransactionForm({ activeRules }: { activeRules: ActiveRuleDTO
 
   function handleChannelSelect(next: Channel) {
     setChannel(next);
-    setExternalRef("");
-    setRefCheck(null);
     if (next === "TRANSFER_HTG" && payoutCurrency === "USD") setPayoutCurrency(null);
-  }
-
-  async function handleRefBlur() {
-    if (!channel || !externalRef.trim()) return;
-    setRefCheck({ checking: true, exists: false });
-    const result = await checkExternalRefAction(channel, externalRef);
-    setRefCheck({ checking: false, exists: result.exists, receiptNo: result.receiptNo, transactionId: result.transactionId });
   }
 
   function handleClientQueryChange(value: string) {
@@ -158,31 +143,10 @@ export function NewTransactionForm({ activeRules }: { activeRules: ActiveRuleDTO
               </button>
             ))}
           </div>
-        </div>
-
-        <div>
-          <label htmlFor="externalRef" className="block text-sm font-medium text-neutral-700">
-            Référence de la transaction
-          </label>
-          <input
-            id="externalRef"
-            name="externalRef"
-            required
-            disabled={!channel}
-            value={externalRef}
-            onChange={(e) => {
-              setExternalRef(e.target.value);
-              setRefCheck(null);
-            }}
-            onBlur={handleRefBlur}
-            className="mt-1 block w-full rounded border border-neutral-300 bg-white px-3 py-2 text-base text-neutral-900 focus:border-neutral-900 focus:outline-none disabled:bg-neutral-100"
-          />
-          {refCheck?.checking ? <p className="mt-1 text-xs text-neutral-500">Vérification…</p> : null}
-          {refCheck && !refCheck.checking && refCheck.exists ? (
-            <p className="mt-1 text-sm text-red-600">
-              Cette référence est déjà utilisée (reçu {refCheck.receiptNo}).
-            </p>
-          ) : null}
+          <p className="mt-1 text-xs text-neutral-500">
+            La référence de la transaction est générée automatiquement à l&apos;enregistrement (elle
+            n&apos;est pas toujours visible sur la capture d&apos;écran).
+          </p>
         </div>
 
         <div>
@@ -432,22 +396,12 @@ export function NewTransactionForm({ activeRules }: { activeRules: ActiveRuleDTO
         {state.error ? (
           <p role="alert" className="text-sm text-red-600">
             {state.error}
-            {state.duplicateOf ? (
-              <>
-                {" "}
-                (
-                <Link href={`/transactions/${state.duplicateOf.transactionId}`} className="underline">
-                  voir le reçu {state.duplicateOf.receiptNo}
-                </Link>
-                )
-              </>
-            ) : null}
           </p>
         ) : null}
 
         <button
           type="submit"
-          disabled={pending || !preview || (refCheck?.exists ?? false)}
+          disabled={pending || !preview}
           className="rounded bg-neutral-900 px-4 py-2 font-medium text-white disabled:opacity-50"
         >
           {pending ? "Enregistrement…" : "Enregistrer"}

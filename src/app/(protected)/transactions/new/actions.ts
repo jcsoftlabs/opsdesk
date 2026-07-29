@@ -15,6 +15,7 @@ import {
   PricingNotAllowedError,
   PricingValidationError,
   RECEIVED_CURRENCY_BY_CHANNEL,
+  CHANNEL_REF_PREFIX,
   type Channel,
   type Currency,
 } from "@/lib/pricing";
@@ -74,33 +75,21 @@ export async function getRecentSendersForClientAction(clientId: string): Promise
   return rows.map((r) => r.senderName);
 }
 
-export interface ExternalRefCheckResult {
-  exists: boolean;
-  transactionId?: string;
-  receiptNo?: string;
-}
-
-export async function checkExternalRefAction(
-  channel: string,
-  externalRef: string,
-): Promise<ExternalRefCheckResult> {
-  await requireUser();
-  const trimmed = externalRef.trim();
-  if (!trimmed) return { exists: false };
-
-  const existing = await prisma.transaction.findUnique({
-    where: { channel_externalRef: { channel: channel as Channel, externalRef: trimmed } },
-    select: { id: true, receiptNo: true },
-  });
-
-  if (!existing) return { exists: false };
-  return { exists: true, transactionId: existing.id, receiptNo: existing.receiptNo };
-}
-
 export interface CreateTransactionState {
   error?: string;
-  duplicateOf?: { transactionId: string; receiptNo: string };
   success?: { transactionId: string; receiptNo: string };
+}
+
+/**
+ * Référence générée par le système, jamais saisie à la main (confirmé
+ * 2026-07-28) : le numéro de confirmation réel Zelle/CashApp n'apparaît pas
+ * toujours dans les captures d'écran. Une séquence Postgres partagée
+ * garantit l'unicité ; le préfixe identifie le canal.
+ */
+async function generateExternalRef(channel: Channel): Promise<string> {
+  const rows = await prisma.$queryRaw<{ nextval: bigint }[]>`SELECT nextval('external_ref_seq') AS nextval`;
+  const seq = rows[0].nextval.toString().padStart(6, "0");
+  return `${CHANNEL_REF_PREFIX[channel]}-${seq}`;
 }
 
 interface AttachmentInput {
@@ -134,7 +123,6 @@ export async function createTransactionAction(
   requireRole(user, [...CREATE_TRANSACTION_ROLES]);
 
   const channel = String(formData.get("channel") ?? "") as Channel;
-  const externalRef = String(formData.get("externalRef") ?? "").trim();
   const senderName = String(formData.get("senderName") ?? "").trim();
   const amountReceivedRaw = String(formData.get("amountReceived") ?? "").trim();
   const payoutCurrency = String(formData.get("payoutCurrency") ?? "") as Currency;
@@ -142,7 +130,6 @@ export async function createTransactionAction(
   if (!["ZELLE", "CASHAPP", "DEPOSIT_USD", "TRANSFER_HTG"].includes(channel)) {
     return { error: "Canal invalide" };
   }
-  if (!externalRef) return { error: "Référence de transaction requise" };
   if (!senderName) return { error: "Nom de l'expéditeur requis" };
   if (!amountReceivedRaw || Number.isNaN(Number(amountReceivedRaw))) {
     return { error: "Montant reçu invalide" };
@@ -232,6 +219,8 @@ export async function createTransactionAction(
     }
   }
 
+  const externalRef = await generateExternalRef(channel);
+
   try {
     const transaction = await prisma.$transaction(async (tx) => {
       const created = await tx.transaction.create({
@@ -279,15 +268,10 @@ export async function createTransactionAction(
     revalidatePath("/dashboard");
     return { success: { transactionId: transaction.id, receiptNo: transaction.receiptNo } };
   } catch (error) {
+    // La référence est générée par une séquence : une collision serait un bug,
+    // pas un vrai doublon. On demande de réessayer plutôt que d'inventer un message.
     if (error instanceof Error && "code" in error && error.code === "P2002") {
-      const existing = await prisma.transaction.findUnique({
-        where: { channel_externalRef: { channel, externalRef } },
-        select: { id: true, receiptNo: true },
-      });
-      return {
-        error: "Cette référence a déjà été utilisée pour ce canal.",
-        duplicateOf: existing ? { transactionId: existing.id, receiptNo: existing.receiptNo } : undefined,
-      };
+      return { error: "Conflit inattendu sur la référence générée. Réessayez." };
     }
     throw error;
   }

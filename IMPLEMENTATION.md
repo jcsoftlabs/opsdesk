@@ -146,7 +146,7 @@ Transaction
   id
   receiptNo           // TRF-2026-000123, séquentiel, généré en base
   channel             ZELLE | CASHAPP | DEPOSIT_USD | TRANSFER_HTG
-  externalRef         // référence/identifiant de la transaction Zelle/CashApp
+  externalRef         // généré par le système : <PREFIXE>-<séquence>, ex. ZL-000123 (voir §7.3)
   senderName          // l'expéditeur à l'étranger
   clientId            // bénéficiaire visé (désigné par l'expéditeur)
   collectedById?       // procuration : qui a réellement retiré l'argent, si différent (§7.4)
@@ -162,7 +162,9 @@ Transaction
   createdAt, verifiedAt?, paidAt?
   cancelledById?, cancelledAt?, cancelReason?
   cashSessionId?      // session de caisse ayant payé
-  // CONTRAINTE UNIQUE (channel, externalRef) — anti-double-paiement
+  // CONTRAINTE UNIQUE (channel, externalRef) — garantie technique (la séquence
+  // ne peut pas collisionner), plus un rempart contre un vrai doublon métier
+  // depuis que la référence n'est plus saisie à la main — voir §7.3
   // index (status, createdAt), (clientId)
 
 Attachment
@@ -242,7 +244,7 @@ Nom d'utilisateur + mot de passe. Rien d'autre. Session de 12 heures.
 
 **Bloc 1 — Origine**
 - Canal (4 gros boutons : Zelle / CashApp / Dépôt USD / Virement HTG)
-- Référence de la transaction → **vérification anti-doublon immédiate au blur du champ**, message d'erreur bloquant si déjà utilisée, avec lien vers la transaction existante
+- **Référence de la transaction : générée automatiquement par le système, pas de saisie manuelle** (changement confirmé 2026-07-28). Le numéro de confirmation réel Zelle/CashApp n'apparaît pas toujours dans la capture d'écran (surtout CashApp, et souvent absent des captures Zelle selon comment le client l'a prise) — demander à la caissière de le recopier n'était pas fiable. Format `<PRÉFIXE>-<séquence>` par canal : `ZL-`, `CA-`, `DU-`, `VH-`, via une séquence Postgres partagée garantissant l'unicité. **Conséquence assumée** : ceci protège contre un doublon technique mais ne détecte plus si le même virement réel est saisi deux fois — ce garde-fou repose désormais uniquement sur l'étape humaine « Vérifié » (§7.4), où la caissière confirme avoir vu l'argent sur le compte.
 - Nom de l'expéditeur
 - Montant reçu
 - Zone de dépôt pour la capture d'écran (glisser-déposer ou depuis l'appareil photo sur mobile)
