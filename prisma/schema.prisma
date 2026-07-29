@@ -1,0 +1,278 @@
+// Schéma Prisma — OpsDesk, phase 1 (transferts)
+// Référence : IMPLEMENTATION.md §4-6
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum Role {
+  CASHIER
+  SUPERVISOR
+  ADMIN
+}
+
+enum Channel {
+  ZELLE
+  CASHAPP
+  DEPOSIT_USD
+  TRANSFER_HTG
+}
+
+enum Currency {
+  USD
+  HTG
+}
+
+enum IdType {
+  NIF
+  CIN
+  PASSPORT
+  PERMIS
+  AUTRE
+}
+
+enum TransactionStatus {
+  RECEIVED
+  VERIFIED
+  PAID
+  CANCELLED
+}
+
+enum AttachmentKind {
+  PAYMENT_SCREENSHOT
+  ID_DOCUMENT
+  OTHER
+}
+
+enum CashSessionStatus {
+  OPEN
+  CLOSED
+}
+
+enum CashMovementDirection {
+  IN
+  OUT
+}
+
+enum CashMovementReason {
+  TRANSFER_PAYOUT
+  TRANSFER_FEE_IN
+  DEPOSIT_IN
+  EXPENSE
+  ADJUSTMENT
+  OPENING
+  OTHER
+}
+
+model User {
+  id           String   @id @default(cuid())
+  fullName     String
+  username     String   @unique
+  passwordHash String
+  role         Role
+  active       Boolean  @default(true)
+  createdAt    DateTime @default(now())
+
+  mustChangePassword Boolean   @default(true)
+  failedLoginCount   Int       @default(0)
+  lockedUntil        DateTime?
+
+  createdClients        Client[]       @relation("ClientCreatedBy")
+  createdTransactions   Transaction[]  @relation("TransactionCreatedBy")
+  verifiedTransactions  Transaction[]  @relation("TransactionVerifiedBy")
+  paidTransactions      Transaction[]  @relation("TransactionPaidBy")
+  cancelledTransactions Transaction[]  @relation("TransactionCancelledBy")
+  uploadedAttachments   Attachment[]
+  cashSessions          CashSession[]
+  cashMovements         CashMovement[]
+  auditLogs             AuditLog[]
+  createdPricingRules   PricingRule[]
+
+  @@map("users")
+}
+
+model Client {
+  id        String   @id @default(cuid())
+  fullName  String
+  phone     String?
+  idType    IdType
+  idNumber  String
+  createdAt DateTime @default(now())
+
+  createdById String
+  createdBy   User   @relation("ClientCreatedBy", fields: [createdById], references: [id])
+
+  transactions Transaction[]
+
+  @@unique([idType, idNumber])
+  @@map("clients")
+}
+
+model PricingRule {
+  id                  String    @id @default(cuid())
+  channel             Channel
+  payoutCurrency      Currency
+  allowed             Boolean
+  feePercent          Decimal   @db.Decimal(5, 2)
+  exchangeRate        Decimal?  @db.Decimal(10, 4)
+  feeBeforeConversion Boolean
+  roundingUnit        Decimal   @default(1) @db.Decimal(10, 4)
+  effectiveFrom       DateTime  @default(now())
+  effectiveTo         DateTime?
+
+  createdById String
+  createdBy   User   @relation(fields: [createdById], references: [id])
+
+  createdAt DateTime @default(now())
+
+  @@index([channel, payoutCurrency, effectiveTo])
+  @@map("pricing_rules")
+}
+
+model Transaction {
+  id          String  @id @default(cuid())
+  receiptNo   String  @unique @default(dbgenerated("generate_receipt_no()")) @db.VarChar
+  channel     Channel
+  externalRef String
+  senderName  String
+
+  clientId String
+  client   Client @relation(fields: [clientId], references: [id])
+
+  amountReceived   Decimal  @db.Decimal(18, 2)
+  receivedCurrency Currency
+  payoutCurrency   Currency
+
+  feePercentApplied   Decimal  @db.Decimal(5, 2)
+  exchangeRateApplied Decimal? @db.Decimal(10, 4)
+  feeAmount           Decimal  @db.Decimal(18, 2)
+  netPayout           Decimal  @db.Decimal(18, 2)
+
+  status TransactionStatus @default(RECEIVED)
+
+  createdById String
+  createdBy   User   @relation("TransactionCreatedBy", fields: [createdById], references: [id])
+
+  verifiedById String?
+  verifiedBy   User?     @relation("TransactionVerifiedBy", fields: [verifiedById], references: [id])
+  verifiedAt   DateTime?
+
+  paidById String?
+  paidBy   User?     @relation("TransactionPaidBy", fields: [paidById], references: [id])
+  paidAt   DateTime?
+
+  cancelledById String?
+  cancelledBy   User?     @relation("TransactionCancelledBy", fields: [cancelledById], references: [id])
+  cancelledAt   DateTime?
+  cancelReason  String?
+
+  cashSessionId String?
+  cashSession   CashSession? @relation(fields: [cashSessionId], references: [id])
+
+  importedFromLegacy Boolean @default(false)
+
+  createdAt DateTime @default(now())
+
+  attachments   Attachment[]
+  cashMovements CashMovement[]
+
+  @@unique([channel, externalRef])
+  @@index([status, createdAt])
+  @@index([clientId])
+  @@map("transactions")
+}
+
+model Attachment {
+  id            String         @id @default(cuid())
+  transactionId String
+  transaction   Transaction    @relation(fields: [transactionId], references: [id])
+  kind          AttachmentKind
+
+  publicId  String
+  secureUrl String
+  mimeType  String
+  sizeBytes Int
+
+  uploadedById String
+  uploadedBy   User   @relation(fields: [uploadedById], references: [id])
+
+  createdAt DateTime @default(now())
+
+  @@index([transactionId])
+  @@map("attachments")
+}
+
+model CashSession {
+  id     String @id @default(cuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id])
+
+  openedAt DateTime  @default(now())
+  closedAt DateTime?
+
+  openingUsd Decimal @db.Decimal(18, 2)
+  openingHtg Decimal @db.Decimal(18, 2)
+
+  expectedUsd  Decimal? @db.Decimal(18, 2)
+  expectedHtg  Decimal? @db.Decimal(18, 2)
+  countedUsd   Decimal? @db.Decimal(18, 2)
+  countedHtg   Decimal? @db.Decimal(18, 2)
+  varianceUsd  Decimal? @db.Decimal(18, 2)
+  varianceHtg  Decimal? @db.Decimal(18, 2)
+  varianceNote String?
+
+  status CashSessionStatus @default(OPEN)
+
+  transactions  Transaction[]
+  cashMovements CashMovement[]
+
+  @@index([userId, status])
+  @@map("cash_sessions")
+}
+
+model CashMovement {
+  id            String      @id @default(cuid())
+  cashSessionId String
+  cashSession   CashSession @relation(fields: [cashSessionId], references: [id])
+
+  direction CashMovementDirection
+  currency  Currency
+  amount    Decimal               @db.Decimal(18, 2)
+  reason    CashMovementReason
+
+  transactionId String?
+  transaction   Transaction? @relation(fields: [transactionId], references: [id])
+
+  note String?
+
+  createdById String
+  createdBy   User     @relation(fields: [createdById], references: [id])
+  createdAt   DateTime @default(now())
+
+  @@index([cashSessionId])
+  @@map("cash_movements")
+}
+
+model AuditLog {
+  id         String @id @default(cuid())
+  userId     String
+  user       User   @relation(fields: [userId], references: [id])
+  action     String
+  entityType String
+  entityId   String
+
+  beforeJson Json?
+  afterJson  Json?
+
+  ipAddress String?
+  createdAt DateTime @default(now())
+
+  @@index([entityType, entityId])
+  @@index([userId, createdAt])
+  @@map("audit_logs")
+}
