@@ -32,10 +32,18 @@ const NAV_ICONS = {
       />
     </svg>
   ),
+  newTransaction: (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="h-5 w-5">
+      <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
+    </svg>
+  ),
 };
 
 export function Sidebar({ user }: { user: CurrentUser }) {
-  const navItems = [{ href: "/dashboard", label: "Tableau de bord", icon: NAV_ICONS.dashboard }];
+  const navItems = [
+    { href: "/dashboard", label: "Tableau de bord", icon: NAV_ICONS.dashboard },
+    { href: "/transactions/new", label: "Nouvelle transaction", icon: NAV_ICONS.newTransaction },
+  ];
   if (user.role === "ADMIN") {
     navItems.push(
       { href: "/admin/users", label: "Utilisateurs", icon: NAV_ICONS.users },
