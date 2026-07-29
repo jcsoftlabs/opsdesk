@@ -58,11 +58,11 @@ export async function payTransactionAction(
     return { error: "Le montant confirmé ne correspond pas au montant à remettre. Rechargez la page." };
   }
 
-  const cashSession = await prisma.cashSession.findFirst({
-    where: { userId: user.id, status: "OPEN" },
-  });
+  // Caisse commune : le paiement puise dans la caisse partagée actuellement
+  // ouverte par l'admin, pas dans une caisse personnelle de l'agent qui paie.
+  const cashSession = await prisma.cashSession.findFirst({ where: { status: "OPEN" } });
   if (!cashSession) {
-    return { error: "Aucune session de caisse ouverte. Ouvrez votre caisse avant de payer." };
+    return { error: "Aucune caisse commune ouverte. Demandez à un administrateur de l'ouvrir." };
   }
 
   await prisma.$transaction([

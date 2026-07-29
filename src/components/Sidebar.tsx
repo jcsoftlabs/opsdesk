@@ -58,7 +58,7 @@ export function Sidebar({ user }: { user: CurrentUser }) {
     { href: "/dashboard", label: "Tableau de bord", icon: NAV_ICONS.dashboard },
     { href: "/transactions/new", label: "Nouvelle transaction", icon: NAV_ICONS.newTransaction },
     { href: "/transactions/pending", label: "Vérification / paiement", icon: NAV_ICONS.pending },
-    { href: "/cash-session", label: "Ma caisse", icon: NAV_ICONS.cash },
+    { href: "/cash-session", label: "Caisse", icon: NAV_ICONS.cash },
   ];
   if (user.role === "ADMIN") {
     navItems.push(

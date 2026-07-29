@@ -99,6 +99,8 @@ PricingRule
 
 Une modification **ne met jamais à jour une ligne existante** : elle clôt la règle courante (`effectiveTo = now`) et en insère une nouvelle. L'historique des taux est un actif comptable.
 
+**Instabilité monétaire (confirmé par le client, 2026-07-28) :** le taux de change peut varier fréquemment. C'est exactement ce que le versionnement de `PricingRule` est conçu pour absorber — l'admin change le taux depuis l'écran de grille tarifaire (§7.7) à tout moment, sans déploiement de code, et chaque transaction garde le taux réellement appliqué au moment où elle a été créée.
+
 ### 4.3 Calcul
 
 ```
@@ -112,7 +114,7 @@ sinon:
     montantARemettre = brut × (1 − feePercent/100)
 ```
 
-**À confirmer avec le client avant de coder les valeurs de seed** — pour Zelle en gourdes, les 10 % s'appliquent-ils avant ou après la conversion au taux de 133 ? Par défaut : `feeBeforeConversion = true`. C'est le seul point de la grille qui reste ambigu et l'écart de marge est significatif.
+**Confirmé par le client (2026-07-28) :** pour Zelle et CashApp en gourdes, les frais (10 % / 15 %) sont retirés **avant** la conversion — `feeBeforeConversion = true` sur les 8 lignes de la grille. C'est la valeur déjà utilisée dans le seed, aucun changement de code nécessaire.
 
 ### 4.4 Représentation de l'argent
 
@@ -168,8 +170,8 @@ Attachment
   mimeType, sizeBytes
   uploadedById, createdAt
 
-CashSession                  // une par caissier et par jour
-  id, userId
+CashSession                  // caisse COMMUNE, pas une par caissier (confirmé 2026-07-28)
+  id, openedById              // toujours un ADMIN
   openedAt, closedAt?
   openingUsd, openingHtg
   expectedUsd, expectedHtg   // calculés à la clôture
@@ -183,10 +185,10 @@ CashMovement
   direction: IN | OUT
   currency: USD | HTG
   amount: Decimal
-  reason: TRANSFER_PAYOUT | TRANSFER_FEE_IN | DEPOSIT_IN | EXPENSE | ADJUSTMENT | OPENING | OTHER
+  reason: TRANSFER_PAYOUT | TRANSFER_FEE_IN | DEPOSIT_IN | EXPENSE | ADJUSTMENT | OPENING | CASH_TOPUP | OTHER
   transactionId?
   note?
-  createdById, createdAt
+  createdById, createdAt      // l'agent qui a réellement remis l'argent, distinct de openedById
 
 AuditLog                     // append-only, jamais de UPDATE ni DELETE
   id, userId, action, entityType, entityId
@@ -210,8 +212,10 @@ AuditLog                     // append-only, jamais de UPDATE ni DELETE
 | Créer une transaction | ✓ | ✓ | ✓ |
 | Marquer vérifiée / payée | ✓ | ✓ | ✓ |
 | Annuler une transaction | ✗ | ✓ | ✓ |
-| Ouvrir / clôturer sa caisse | ✓ | ✓ | ✓ |
-| Voir la caisse d'un autre | ✗ | ✓ | ✓ |
+| Payer (puise dans la caisse commune) | ✓ | ✓ | ✓ |
+| Ouvrir / clôturer la caisse commune | ✗ | ✗ | ✓ |
+| Ajouter un apport de liquidités | ✗ | ✗ | ✓ |
+| Consulter l'état de la caisse commune | ✓ | ✓ | ✓ |
 | Modifier taux et frais | ✗ | ✗ | ✓ |
 | Rapports globaux | ✗ | ✓ | ✓ |
 | Gérer les utilisateurs | ✗ | ✗ | ✓ |
@@ -272,10 +276,15 @@ Bouton **Enregistrer** → statut `RECEIVED`.
 - Deux exemplaires : client et archive.
 - Bouton secondaire « Envoyer par WhatsApp » → ouvre `https://wa.me/<numéro>?text=<récapitulatif>`. Pas d'intégration API WhatsApp en phase 1, c'est un lien.
 
-### 7.6 Caisse
-- **Ouverture** : le caissier saisit le fonds de départ en USD et en HTG. Obligatoire avant toute opération de paiement.
-- **Clôture** : le système affiche le solde théorique par devise ; le caissier saisit le montant réellement compté ; l'écart est calculé et exige une note s'il n'est pas nul. Session verrouillée après clôture.
-- Un caissier ne peut pas avoir deux sessions ouvertes.
+### 7.6 Caisse commune
+
+**Confirmé par le client (2026-07-28) : ce n'est pas une caisse par caissier.** Les agents qui traitent les transactions (créer, vérifier, payer) ne gèrent pas leur propre caisse — l'argent physique remis aux clients vient d'une caisse **partagée**, gérée par un autre service. Le comptage/liquide fluctue en cours de journée : un livreur apporte des apports de cash (USD et HTG) pour renflouer les liquidités.
+
+- **Ouverture** : réservée à l'**ADMIN**. Il saisit le fonds de départ en USD et en HTG pour la caisse commune de la période. Obligatoire avant toute opération de paiement (par n'importe quel agent).
+- **Apport de liquidités** : l'ADMIN peut ajouter un mouvement d'entrée (USD ou HTG) à tout moment pendant que la caisse est ouverte, pour refléter une livraison de cash.
+- **Paiement** : quel que soit l'agent qui clique sur *Payer*, le mouvement de sortie est imputé à la caisse commune actuellement ouverte ; l'agent qui a effectué la remise reste tracé sur le mouvement (`CashMovement.createdById`), distinct de qui a ouvert la caisse.
+- **Clôture** : réservée à l'ADMIN. Le système affiche le solde théorique par devise (fonds de départ + apports − remises) ; l'ADMIN saisit le montant réellement compté ; l'écart est calculé et exige une note s'il n'est pas nul. Session verrouillée après clôture.
+- Une seule caisse commune peut être ouverte à la fois.
 
 ### 7.7 Administration (ADMIN)
 - Grille tarifaire : tableau des 8 combinaisons canal × devise, modifiable. Chaque modification demande confirmation et journalise l'auteur. **Affiche un aperçu du calcul sur un montant de 500 USD avant validation** — c'est le garde-fou contre une faute de frappe sur le taux.
@@ -347,7 +356,7 @@ Les phases 2 (services légaux) et 3 (produits et stock) ne sont **pas** dans ce
 
 ## 13. Points à confirmer avec le client avant de coder
 
-1. Pour Zelle et CashApp en gourdes : frais prélevés **avant** ou **après** la conversion au taux de 133 ?
+1. ~~Pour Zelle et CashApp en gourdes : frais prélevés avant ou après la conversion ?~~ **Confirmé 2026-07-28 : avant.** Voir §4.3.
 2. Arrondi du montant remis en gourdes : à la gourde, ou à 5 HTG ?
 3. Existe-t-il un montant plafond au-delà duquel une validation du superviseur est requise ?
 4. La commission est-elle parfois négociée pour les gros montants ou les clients réguliers ? Si oui, il faut un champ de dérogation tracé et réservé au superviseur.

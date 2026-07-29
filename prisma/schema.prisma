@@ -66,6 +66,7 @@ enum CashMovementReason {
   EXPENSE
   ADJUSTMENT
   OPENING
+  CASH_TOPUP
   OTHER
 }
 
@@ -88,7 +89,7 @@ model User {
   paidTransactions      Transaction[]  @relation("TransactionPaidBy")
   cancelledTransactions Transaction[]  @relation("TransactionCancelledBy")
   uploadedAttachments   Attachment[]
-  cashSessions          CashSession[]
+  openedCashSessions    CashSession[]
   cashMovements         CashMovement[]
   auditLogs             AuditLog[]
   createdPricingRules   PricingRule[]
@@ -207,10 +208,14 @@ model Attachment {
   @@map("attachments")
 }
 
+// Caisse commune (pas une caisse par caissier) : les agents qui traitent les
+// transactions ne gèrent pas leur propre caisse — ils puisent dans une caisse
+// partagée que seul l'ADMIN ouvre/ferme, alimentée en cours de journée par des
+// apports de liquidités (livraison de cash). Voir IMPLEMENTATION.md §7.6.
 model CashSession {
-  id     String @id @default(cuid())
-  userId String
-  user   User   @relation(fields: [userId], references: [id])
+  id         String @id @default(cuid())
+  openedById String
+  openedBy   User   @relation(fields: [openedById], references: [id])
 
   openedAt DateTime  @default(now())
   closedAt DateTime?
@@ -231,7 +236,7 @@ model CashSession {
   transactions  Transaction[]
   cashMovements CashMovement[]
 
-  @@index([userId, status])
+  @@index([status])
   @@map("cash_sessions")
 }
 

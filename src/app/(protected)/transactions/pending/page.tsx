@@ -12,6 +12,9 @@ const CHANNEL_LABEL: Record<string, string> = {
   TRANSFER_HTG: "Virement HTG",
 };
 
+// La caisse commune peut être ouverte/fermée par l'admin à tout moment : jamais de cache obsolète.
+export const dynamic = "force-dynamic";
+
 const AMOUNT_FORMATTER = new Intl.NumberFormat("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
 export default async function PendingTransactionsPage() {
@@ -28,7 +31,8 @@ export default async function PendingTransactionsPage() {
       include: { client: { select: { fullName: true } } },
       orderBy: { createdAt: "asc" },
     }),
-    prisma.cashSession.findFirst({ where: { userId: user.id, status: "OPEN" } }),
+    // Caisse commune : une seule session partagée, pas une par agent.
+    prisma.cashSession.findFirst({ where: { status: "OPEN" } }),
   ]);
 
   return (
@@ -37,6 +41,7 @@ export default async function PendingTransactionsPage() {
 
       <CashSessionBanner
         open={openSession ? { openingUsd: openSession.openingUsd.toString(), openingHtg: openSession.openingHtg.toString() } : null}
+        isAdmin={user.role === "ADMIN"}
       />
 
       <section>

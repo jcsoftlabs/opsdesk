@@ -3,8 +3,12 @@
 import { revalidatePath } from "next/cache";
 import Decimal from "decimal.js";
 import { prisma } from "@/lib/db";
-import { requireUser } from "@/lib/auth";
+import { requireUser, requireRole } from "@/lib/auth";
 import { recordAuditLog } from "@/lib/audit";
+
+// Caisse commune : les agents qui traitent les transactions ne gèrent pas leur
+// propre caisse. Seul l'ADMIN ouvre/ferme la caisse partagée et enregistre les
+// apports de liquidités (livraison de cash). Voir IMPLEMENTATION.md §7.6.
 
 export interface OpenCashSessionState {
   error?: string;
@@ -15,11 +19,10 @@ export async function openCashSessionAction(
   formData: FormData,
 ): Promise<OpenCashSessionState> {
   const user = await requireUser();
+  requireRole(user, ["ADMIN"]);
 
-  const existing = await prisma.cashSession.findFirst({
-    where: { userId: user.id, status: "OPEN" },
-  });
-  if (existing) return { error: "Vous avez déjà une session de caisse ouverte." };
+  const existing = await prisma.cashSession.findFirst({ where: { status: "OPEN" } });
+  if (existing) return { error: "Une caisse commune est déjà ouverte." };
 
   const openingUsdRaw = String(formData.get("openingUsd") ?? "0").trim();
   const openingHtgRaw = String(formData.get("openingHtg") ?? "0").trim();
@@ -32,7 +35,7 @@ export async function openCashSessionAction(
 
   const session = await prisma.cashSession.create({
     data: {
-      userId: user.id,
+      openedById: user.id,
       openingUsd: openingUsdRaw,
       openingHtg: openingHtgRaw,
     },
@@ -88,11 +91,11 @@ export async function closeCashSessionAction(
   formData: FormData,
 ): Promise<CloseCashSessionState> {
   const user = await requireUser();
+  requireRole(user, ["ADMIN"]);
 
   const cashSessionId = String(formData.get("cashSessionId") ?? "");
   const session = await prisma.cashSession.findUnique({ where: { id: cashSessionId } });
   if (!session) return { error: "Session de caisse introuvable" };
-  if (session.userId !== user.id) return { error: "Vous ne pouvez clôturer que votre propre caisse" };
   if (session.status !== "OPEN") return { error: "Cette session est déjà clôturée" };
 
   const countedUsdRaw = String(formData.get("countedUsd") ?? "").trim();
@@ -146,5 +149,52 @@ export async function closeCashSessionAction(
   revalidatePath("/cash-session");
   revalidatePath("/dashboard");
   revalidatePath("/transactions/pending");
+  return {};
+}
+
+export interface AddTopUpState {
+  error?: string;
+}
+
+/** Apport de liquidités en cours de journée (livraison de cash par un livreur). */
+export async function addCashTopUpAction(
+  _prevState: AddTopUpState,
+  formData: FormData,
+): Promise<AddTopUpState> {
+  const user = await requireUser();
+  requireRole(user, ["ADMIN"]);
+
+  const currency = String(formData.get("currency") ?? "");
+  const amountRaw = String(formData.get("amount") ?? "").trim();
+  const note = String(formData.get("note") ?? "").trim();
+
+  if (!["USD", "HTG"].includes(currency)) return { error: "Devise invalide" };
+  const amount = Number(amountRaw);
+  if (!Number.isFinite(amount) || amount <= 0) return { error: "Montant invalide" };
+
+  const session = await prisma.cashSession.findFirst({ where: { status: "OPEN" } });
+  if (!session) return { error: "Aucune caisse commune ouverte." };
+
+  await prisma.cashMovement.create({
+    data: {
+      cashSessionId: session.id,
+      direction: "IN",
+      currency: currency as "USD" | "HTG",
+      amount: amountRaw,
+      reason: "CASH_TOPUP",
+      note: note || null,
+      createdById: user.id,
+    },
+  });
+
+  await recordAuditLog({
+    userId: user.id,
+    action: "CASH_TOPUP_ADDED",
+    entityType: "CashSession",
+    entityId: session.id,
+    afterJson: { currency, amount: amountRaw, note },
+  });
+
+  revalidatePath("/cash-session");
   return {};
 }

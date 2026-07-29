@@ -1,9 +1,9 @@
-import Link from "next/link";
 import { requireUserOrRedirect } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { computeExpectedTotals } from "./actions";
 import { OpenCashSessionForm } from "./OpenCashSessionForm";
 import { CloseCashSessionForm } from "./CloseCashSessionForm";
+import { TopUpForm } from "./TopUpForm";
 
 // Données sensibles (soldes de caisse) : jamais de rendu mis en cache côté client.
 export const dynamic = "force-dynamic";
@@ -18,96 +18,63 @@ const REASON_LABEL: Record<string, string> = {
   EXPENSE: "Dépense",
   ADJUSTMENT: "Ajustement",
   OPENING: "Ouverture",
+  CASH_TOPUP: "Apport de liquidités",
   OTHER: "Autre",
 };
 
-export default async function CashSessionPage({
-  searchParams,
-}: {
-  searchParams: Promise<{ userId?: string }>;
-}) {
+export default async function CashSessionPage() {
   const user = await requireUserOrRedirect();
-  const { userId: requestedUserId } = await searchParams;
+  const isAdmin = user.role === "ADMIN";
 
-  const canViewOthers = user.role === "SUPERVISOR" || user.role === "ADMIN";
-  const targetUserId = canViewOthers && requestedUserId ? requestedUserId : user.id;
-
-  const targetUser = await prisma.user.findUnique({
-    where: { id: targetUserId },
-    select: { id: true, fullName: true },
+  const openSession = await prisma.cashSession.findFirst({
+    where: { status: "OPEN" },
+    include: { openedBy: { select: { fullName: true } } },
   });
-
-  const otherUsers = canViewOthers
-    ? await prisma.user.findMany({
-        where: { active: true },
-        select: { id: true, fullName: true },
-        orderBy: { fullName: "asc" },
-      })
-    : [];
-
-  const openSession = targetUser
-    ? await prisma.cashSession.findFirst({ where: { userId: targetUser.id, status: "OPEN" } })
-    : null;
 
   const movements = openSession
     ? await prisma.cashMovement.findMany({
         where: { cashSessionId: openSession.id },
+        include: { createdBy: { select: { fullName: true } } },
         orderBy: { createdAt: "asc" },
       })
     : [];
 
   const expected = openSession ? await computeExpectedTotals(openSession.id) : null;
 
-  const history = targetUser
-    ? await prisma.cashSession.findMany({
-        where: { userId: targetUser.id, status: "CLOSED" },
-        orderBy: { closedAt: "desc" },
-        take: 20,
-      })
-    : [];
-
-  const isOwnSession = targetUserId === user.id;
+  const history = await prisma.cashSession.findMany({
+    where: { status: "CLOSED" },
+    include: { openedBy: { select: { fullName: true } } },
+    orderBy: { closedAt: "desc" },
+    take: 20,
+  });
 
   return (
     <main className="mx-auto max-w-3xl space-y-6 p-8">
-      <h1 className="text-lg font-semibold text-neutral-900">Caisse</h1>
-
-      {canViewOthers ? (
-        <div className="flex flex-wrap gap-2 text-sm">
-          <Link
-            href="/cash-session"
-            className={isOwnSession ? "rounded bg-neutral-900 px-3 py-1 text-white" : "rounded border border-neutral-300 px-3 py-1 text-neutral-600"}
-          >
-            Ma caisse
-          </Link>
-          {otherUsers
-            .filter((u) => u.id !== user.id)
-            .map((u) => (
-              <Link
-                key={u.id}
-                href={`/cash-session?userId=${u.id}`}
-                className={
-                  targetUserId === u.id
-                    ? "rounded bg-neutral-900 px-3 py-1 text-white"
-                    : "rounded border border-neutral-300 px-3 py-1 text-neutral-600"
-                }
-              >
-                {u.fullName}
-              </Link>
-            ))}
-        </div>
-      ) : null}
-
-      {!isOwnSession && targetUser ? (
-        <p className="text-sm text-neutral-500">Caisse de {targetUser.fullName} (lecture)</p>
-      ) : null}
+      <div>
+        <h1 className="text-lg font-semibold text-neutral-900">Caisse commune</h1>
+        <p className="mt-1 text-sm text-neutral-500">
+          Caisse partagée entre les agents de transaction. Seul un administrateur peut l&apos;ouvrir,
+          la clôturer ou y ajouter des liquidités.
+        </p>
+      </div>
 
       {openSession && expected ? (
         <>
           <div className="rounded-lg border border-green-200 bg-green-50 p-4 text-sm text-green-900">
-            Session ouverte le {DATE_FORMATTER.format(openSession.openedAt)} — fonds de départ{" "}
-            {AMOUNT_FORMATTER.format(Number(openSession.openingUsd))} USD /{" "}
+            Ouverte par {openSession.openedBy.fullName} le {DATE_FORMATTER.format(openSession.openedAt)} — fonds
+            de départ {AMOUNT_FORMATTER.format(Number(openSession.openingUsd))} USD /{" "}
             {AMOUNT_FORMATTER.format(Number(openSession.openingHtg))} HTG
+          </div>
+
+          <div className="grid grid-cols-2 gap-4 text-sm">
+            <div className="rounded-lg border border-neutral-200 bg-white p-4">
+              <p className="text-neutral-500">Solde théorique USD</p>
+              <p className="font-mono text-lg text-neutral-900">{AMOUNT_FORMATTER.format(expected.expectedUsd.toNumber())}</p>
+            </div>
+            <div className="rounded-lg border border-neutral-200 bg-white p-4">
+              <p className="text-neutral-500">Solde théorique HTG</p>
+              <p className="font-mono text-lg text-neutral-900">{AMOUNT_FORMATTER.format(expected.expectedHtg.toNumber())}</p>
+            </div>
           </div>
 
           <div className="overflow-hidden rounded-lg border border-neutral-200 bg-white">
@@ -116,6 +83,7 @@ export default async function CashSessionPage({
                 <tr>
                   <th className="px-4 py-2">Heure</th>
                   <th className="px-4 py-2">Motif</th>
+                  <th className="px-4 py-2">Agent</th>
                   <th className="px-4 py-2">Sens</th>
                   <th className="px-4 py-2">Montant</th>
                 </tr>
@@ -125,6 +93,7 @@ export default async function CashSessionPage({
                   <tr key={m.id} className="border-b border-neutral-100 last:border-0">
                     <td className="px-4 py-2 text-neutral-500">{DATE_FORMATTER.format(m.createdAt)}</td>
                     <td className="px-4 py-2 text-neutral-700">{REASON_LABEL[m.reason]}</td>
+                    <td className="px-4 py-2 text-neutral-700">{m.createdBy.fullName}</td>
                     <td className="px-4 py-2 text-neutral-700">{m.direction === "IN" ? "Entrée" : "Sortie"}</td>
                     <td className="px-4 py-2 text-neutral-900">
                       {AMOUNT_FORMATTER.format(Number(m.amount))} {m.currency}
@@ -133,7 +102,7 @@ export default async function CashSessionPage({
                 ))}
                 {movements.length === 0 ? (
                   <tr>
-                    <td colSpan={4} className="px-4 py-6 text-center text-neutral-400">
+                    <td colSpan={5} className="px-4 py-6 text-center text-neutral-400">
                       Aucun mouvement pour l&apos;instant.
                     </td>
                   </tr>
@@ -142,18 +111,23 @@ export default async function CashSessionPage({
             </table>
           </div>
 
-          {isOwnSession ? (
-            <CloseCashSessionForm
-              cashSessionId={openSession.id}
-              expectedUsd={expected.expectedUsd.toString()}
-              expectedHtg={expected.expectedHtg.toString()}
-            />
+          {isAdmin ? (
+            <>
+              <TopUpForm />
+              <CloseCashSessionForm
+                cashSessionId={openSession.id}
+                expectedUsd={expected.expectedUsd.toString()}
+                expectedHtg={expected.expectedHtg.toString()}
+              />
+            </>
           ) : null}
         </>
-      ) : isOwnSession ? (
+      ) : isAdmin ? (
         <OpenCashSessionForm />
       ) : (
-        <p className="text-sm text-neutral-400">Aucune session ouverte.</p>
+        <p className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+          Aucune caisse commune ouverte. Demandez à un administrateur de l&apos;ouvrir.
+        </p>
       )}
 
       {history.length > 0 ? (
@@ -164,6 +138,7 @@ export default async function CashSessionPage({
               <thead className="border-b border-neutral-200 bg-neutral-50 text-xs uppercase text-neutral-500">
                 <tr>
                   <th className="px-4 py-2">Clôturée le</th>
+                  <th className="px-4 py-2">Ouverte par</th>
                   <th className="px-4 py-2">Compté USD</th>
                   <th className="px-4 py-2">Écart USD</th>
                   <th className="px-4 py-2">Compté HTG</th>
@@ -175,6 +150,7 @@ export default async function CashSessionPage({
                 {history.map((s) => (
                   <tr key={s.id} className="border-b border-neutral-100 last:border-0">
                     <td className="px-4 py-2 text-neutral-500">{s.closedAt ? DATE_FORMATTER.format(s.closedAt) : "—"}</td>
+                    <td className="px-4 py-2 text-neutral-700">{s.openedBy.fullName}</td>
                     <td className="px-4 py-2 text-neutral-900">{AMOUNT_FORMATTER.format(Number(s.countedUsd))}</td>
                     <td className={Number(s.varianceUsd) === 0 ? "px-4 py-2 text-neutral-500" : "px-4 py-2 font-medium text-red-600"}>
                       {AMOUNT_FORMATTER.format(Number(s.varianceUsd))}
