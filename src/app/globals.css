@@ -24,3 +24,23 @@ body {
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
 }
+
+/* Reçu imprimable (§7.5) : ticket 80mm, un exemplaire par page à l'impression. */
+@media print {
+  aside {
+    display: none !important;
+  }
+
+  .receipt-copy {
+    break-after: page;
+  }
+
+  .receipt-copy:last-child {
+    break-after: auto;
+  }
+
+  @page {
+    size: 80mm auto;
+    margin: 4mm;
+  }
+}

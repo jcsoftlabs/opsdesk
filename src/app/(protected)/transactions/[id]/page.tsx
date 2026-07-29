@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { notFound } from "next/navigation";
 import { requireUserOrRedirect } from "@/lib/auth";
 import { prisma } from "@/lib/db";
@@ -45,7 +46,15 @@ export default async function TransactionDetailPage({ params }: { params: Promis
 
   return (
     <main className="mx-auto max-w-2xl p-8">
-      <h1 className="text-lg font-semibold text-neutral-900">Transaction {transaction.receiptNo}</h1>
+      <div className="flex items-center justify-between">
+        <h1 className="text-lg font-semibold text-neutral-900">Transaction {transaction.receiptNo}</h1>
+        <Link
+          href={`/transactions/${transaction.id}/receipt`}
+          className="rounded border border-neutral-300 px-3 py-1.5 text-sm text-neutral-700 hover:bg-neutral-50"
+        >
+          Voir le reçu
+        </Link>
+      </div>
       <dl className="mt-6 divide-y divide-neutral-200 rounded-lg border border-neutral-200 bg-white">
         {rows.map(([label, value]) => (
           <div key={label} className="flex justify-between px-4 py-2 text-sm">
