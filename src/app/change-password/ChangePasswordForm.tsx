@@ -1,6 +1,7 @@
 "use client";
 
 import { useActionState } from "react";
+import { PasswordField } from "@/components/PasswordField";
 import { changePasswordAction, type ChangePasswordState } from "./actions";
 
 const initialState: ChangePasswordState = {};
@@ -19,50 +20,31 @@ export function ChangePasswordForm({ forced }: { forced: boolean }) {
         ) : null}
       </div>
 
-      <div>
-        <label htmlFor="currentPassword" className="block text-sm font-medium text-neutral-700">
-          Mot de passe actuel
-        </label>
-        <input
-          id="currentPassword"
-          name="currentPassword"
-          type="password"
-          required
-          autoComplete="current-password"
-          className="mt-1 block w-full rounded border border-neutral-300 px-3 py-2 text-base focus:border-neutral-900 focus:outline-none"
-        />
-      </div>
+      <PasswordField
+        name="currentPassword"
+        label="Mot de passe actuel"
+        required
+        autoComplete="current-password"
+      />
 
       <div>
-        <label htmlFor="newPassword" className="block text-sm font-medium text-neutral-700">
-          Nouveau mot de passe
-        </label>
-        <input
-          id="newPassword"
+        <PasswordField
           name="newPassword"
-          type="password"
+          label="Nouveau mot de passe"
           required
           minLength={10}
           autoComplete="new-password"
-          className="mt-1 block w-full rounded border border-neutral-300 px-3 py-2 text-base focus:border-neutral-900 focus:outline-none"
         />
         <p className="mt-1 text-xs text-neutral-500">Au moins 10 caractères.</p>
       </div>
 
-      <div>
-        <label htmlFor="confirmPassword" className="block text-sm font-medium text-neutral-700">
-          Confirmer le nouveau mot de passe
-        </label>
-        <input
-          id="confirmPassword"
-          name="confirmPassword"
-          type="password"
-          required
-          minLength={10}
-          autoComplete="new-password"
-          className="mt-1 block w-full rounded border border-neutral-300 px-3 py-2 text-base focus:border-neutral-900 focus:outline-none"
-        />
-      </div>
+      <PasswordField
+        name="confirmPassword"
+        label="Confirmer le nouveau mot de passe"
+        required
+        minLength={10}
+        autoComplete="new-password"
+      />
 
       {state.error ? (
         <p role="alert" className="text-sm text-red-600">

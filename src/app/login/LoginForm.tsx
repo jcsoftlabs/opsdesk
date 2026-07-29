@@ -1,6 +1,7 @@
 "use client";
 
 import { useActionState } from "react";
+import { PasswordField } from "@/components/PasswordField";
 import { loginAction, type LoginState } from "./actions";
 
 const initialState: LoginState = {};
@@ -26,23 +27,11 @@ export function LoginForm() {
           required
           autoFocus
           autoComplete="username"
-          className="mt-1 block w-full rounded border border-neutral-300 px-3 py-2 text-base focus:border-neutral-900 focus:outline-none"
+          className="mt-1 block w-full rounded border border-neutral-300 bg-white px-3 py-2 text-base text-neutral-900 focus:border-neutral-900 focus:outline-none"
         />
       </div>
 
-      <div>
-        <label htmlFor="password" className="block text-sm font-medium text-neutral-700">
-          Mot de passe
-        </label>
-        <input
-          id="password"
-          name="password"
-          type="password"
-          required
-          autoComplete="current-password"
-          className="mt-1 block w-full rounded border border-neutral-300 px-3 py-2 text-base focus:border-neutral-900 focus:outline-none"
-        />
-      </div>
+      <PasswordField name="password" label="Mot de passe" required autoComplete="current-password" />
 
       {state.error ? (
         <p role="alert" className="text-sm text-red-600">

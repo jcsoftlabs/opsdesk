@@ -25,7 +25,7 @@ export function UserRowActions({ userId, active }: { userId: string; active: boo
           <button
             type="submit"
             disabled={togglePending}
-            className="rounded border border-neutral-300 px-2 py-1 text-xs hover:bg-neutral-50 disabled:opacity-50"
+            className="rounded border border-neutral-300 bg-white px-2 py-1 text-xs text-neutral-700 hover:bg-neutral-50 disabled:opacity-50"
           >
             {active ? "Désactiver" : "Réactiver"}
           </button>
@@ -35,7 +35,7 @@ export function UserRowActions({ userId, active }: { userId: string; active: boo
           <button
             type="submit"
             disabled={resetPending}
-            className="rounded border border-neutral-300 px-2 py-1 text-xs hover:bg-neutral-50 disabled:opacity-50"
+            className="rounded border border-neutral-300 bg-white px-2 py-1 text-xs text-neutral-700 hover:bg-neutral-50 disabled:opacity-50"
           >
             Réinitialiser mot de passe
           </button>

@@ -20,7 +20,7 @@ export function CreateUserForm() {
             id="fullName"
             name="fullName"
             required
-            className="mt-1 rounded border border-neutral-300 px-2 py-1.5 text-sm"
+            className="mt-1 rounded border border-neutral-300 bg-white px-2 py-1.5 text-sm text-neutral-900"
           />
         </div>
         <div>
@@ -31,7 +31,7 @@ export function CreateUserForm() {
             id="username"
             name="username"
             required
-            className="mt-1 rounded border border-neutral-300 px-2 py-1.5 text-sm"
+            className="mt-1 rounded border border-neutral-300 bg-white px-2 py-1.5 text-sm text-neutral-900"
           />
         </div>
         <div>
@@ -42,7 +42,7 @@ export function CreateUserForm() {
             id="role"
             name="role"
             defaultValue="CASHIER"
-            className="mt-1 rounded border border-neutral-300 px-2 py-1.5 text-sm"
+            className="mt-1 rounded border border-neutral-300 bg-white px-2 py-1.5 text-sm text-neutral-900"
           >
             <option value="CASHIER">Caissier</option>
             <option value="SUPERVISOR">Superviseur</option>

@@ -12,11 +12,11 @@
   --font-mono: var(--font-geist-mono);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+/* Thème clair uniquement : l'app est un outil de back-office, pas de mode sombre
+   pour l'instant. Sans ce color-scheme, les <input>/<select> natifs héritent du
+   thème sombre du système sur fond blanc → texte illisible. */
+html {
+  color-scheme: light;
 }
 
 body {
