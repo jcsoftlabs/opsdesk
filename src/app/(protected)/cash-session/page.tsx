@@ -9,7 +9,7 @@ import { TopUpForm } from "./TopUpForm";
 export const dynamic = "force-dynamic";
 
 const AMOUNT_FORMATTER = new Intl.NumberFormat("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-const DATE_FORMATTER = new Intl.DateTimeFormat("fr-FR", { dateStyle: "short", timeStyle: "short" });
+const DATE_FORMATTER = new Intl.DateTimeFormat("fr-FR", { dateStyle: "short", timeStyle: "short", hour12: true });
 
 const REASON_LABEL: Record<string, string> = {
   TRANSFER_PAYOUT: "Remise de transfert",

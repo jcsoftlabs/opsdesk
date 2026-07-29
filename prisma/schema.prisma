@@ -30,7 +30,7 @@ enum Currency {
 
 enum IdType {
   NIF
-  CIN
+  NIU
   PASSPORT
   PERMIS
   AUTRE

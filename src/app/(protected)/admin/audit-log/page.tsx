@@ -4,6 +4,7 @@ import { prisma } from "@/lib/db";
 const DATE_FORMATTER = new Intl.DateTimeFormat("fr-FR", {
   dateStyle: "short",
   timeStyle: "medium",
+  hour12: true,
 });
 
 export default async function AuditLogPage() {

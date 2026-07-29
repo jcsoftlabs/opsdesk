@@ -53,6 +53,27 @@ export async function searchClientsAction(query: string): Promise<ClientSearchRe
   });
 }
 
+/**
+ * Un même expéditeur envoie souvent à répétition au même bénéficiaire. Pas de
+ * table Sender séparée (un expéditeur à l'étranger n'a pas d'identifiant fiable
+ * pour dédupliquer) : on suggère simplement les noms déjà utilisés pour ce
+ * client, tirés de l'historique des transactions.
+ */
+export async function getRecentSendersForClientAction(clientId: string): Promise<string[]> {
+  await requireUser();
+  if (!clientId) return [];
+
+  const rows = await prisma.transaction.findMany({
+    where: { clientId },
+    distinct: ["senderName"],
+    select: { senderName: true },
+    orderBy: { createdAt: "desc" },
+    take: 5,
+  });
+
+  return rows.map((r) => r.senderName);
+}
+
 export interface ExternalRefCheckResult {
   exists: boolean;
   transactionId?: string;

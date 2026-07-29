@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { requireUserOrRedirect } from "@/lib/auth";
 import { prisma } from "@/lib/db";
+import { ID_TYPE_LABEL } from "@/lib/idType";
 
 const CHANNEL_LABEL: Record<string, string> = {
   ZELLE: "Zelle",
@@ -36,7 +37,7 @@ export default async function TransactionDetailPage({ params }: { params: Promis
     ["Référence", transaction.externalRef],
     ["Expéditeur", transaction.senderName],
     ["Bénéficiaire", transaction.client.fullName],
-    ["Pièce d'identité", `${transaction.client.idType} ${transaction.client.idNumber}`],
+    ["Pièce d'identité", `${ID_TYPE_LABEL[transaction.client.idType]} ${transaction.client.idNumber}`],
     ["Montant reçu", `${AMOUNT_FORMATTER.format(Number(transaction.amountReceived))} ${transaction.receivedCurrency}`],
     ["Frais appliqués", `${transaction.feePercentApplied.toString()} %`],
     ["Taux appliqué", transaction.exchangeRateApplied?.toString() ?? "—"],

@@ -4,9 +4,11 @@ import { useActionState, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { AttachmentUploader, type UploadedAttachment } from "@/components/AttachmentUploader";
 import { calculatePricing, type Channel, type Currency } from "@/lib/pricing";
+import { ID_TYPE_LABEL } from "@/lib/idType";
 import {
   checkExternalRefAction,
   createTransactionAction,
+  getRecentSendersForClientAction,
   searchClientsAction,
   type ClientSearchResult,
   type CreateTransactionState,
@@ -29,13 +31,6 @@ const CHANNEL_LABEL: Record<Channel, string> = {
   TRANSFER_HTG: "Virement HTG",
 };
 
-const ID_TYPE_LABEL: Record<string, string> = {
-  NIF: "NIF",
-  CIN: "CIN",
-  PASSPORT: "Passeport",
-  PERMIS: "Permis",
-  AUTRE: "Autre",
-};
 
 const AMOUNT_FORMATTER_USD = new Intl.NumberFormat("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const AMOUNT_FORMATTER_HTG = new Intl.NumberFormat("fr-FR", { maximumFractionDigits: 0 });
@@ -57,7 +52,9 @@ export function NewTransactionForm({ activeRules }: { activeRules: ActiveRuleDTO
   const [clientQuery, setClientQuery] = useState("");
   const [clientResults, setClientResults] = useState<ClientSearchResult[]>([]);
   const [selectedClient, setSelectedClient] = useState<ClientSearchResult | null>(null);
+  const [recentSenders, setRecentSenders] = useState<string[]>([]);
   const searchDebounce = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const senderNameRef = useRef<HTMLInputElement>(null);
 
   const [paymentAttachments, setPaymentAttachments] = useState<UploadedAttachment[]>([]);
   const [idAttachments, setIdAttachments] = useState<UploadedAttachment[]>([]);
@@ -196,6 +193,7 @@ export function NewTransactionForm({ activeRules }: { activeRules: ActiveRuleDTO
             id="senderName"
             name="senderName"
             required
+            ref={senderNameRef}
             className="mt-1 block w-full rounded border border-neutral-300 bg-white px-3 py-2 text-base text-neutral-900 focus:border-neutral-900 focus:outline-none"
           />
         </div>
@@ -243,10 +241,11 @@ export function NewTransactionForm({ activeRules }: { activeRules: ActiveRuleDTO
                 <li key={c.id}>
                   <button
                     type="button"
-                    onClick={() => {
+                    onClick={async () => {
                       setSelectedClient(c);
                       setClientResults([]);
                       setClientQuery(c.fullName);
+                      setRecentSenders(await getRecentSendersForClientAction(c.id));
                     }}
                     className="block w-full px-3 py-2 text-left text-sm hover:bg-neutral-50"
                   >
@@ -274,13 +273,36 @@ export function NewTransactionForm({ activeRules }: { activeRules: ActiveRuleDTO
               onClick={() => {
                 setSelectedClient(null);
                 setClientQuery("");
+                setRecentSenders([]);
               }}
               className="text-neutral-500 hover:text-neutral-900"
             >
               Changer
             </button>
           </div>
-        ) : (
+        ) : null}
+
+        {recentSenders.length > 0 ? (
+          <div className="flex flex-wrap items-center gap-1.5">
+            <span className="text-xs text-neutral-500">
+              Déjà envoyé à ce bénéficiaire — cliquer pour préremplir l&apos;expéditeur :
+            </span>
+            {recentSenders.map((name) => (
+              <button
+                key={name}
+                type="button"
+                onClick={() => {
+                  if (senderNameRef.current) senderNameRef.current.value = name;
+                }}
+                className="rounded-full border border-neutral-300 bg-neutral-50 px-2 py-0.5 text-xs text-neutral-700 hover:bg-neutral-100"
+              >
+                {name}
+              </button>
+            ))}
+          </div>
+        ) : null}
+
+        {!selectedClient ? (
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div className="sm:col-span-2">
               <label htmlFor="clientFullName" className="block text-sm font-medium text-neutral-700">
@@ -299,7 +321,7 @@ export function NewTransactionForm({ activeRules }: { activeRules: ActiveRuleDTO
               <select
                 id="clientIdType"
                 name="clientIdType"
-                defaultValue="CIN"
+                defaultValue="NIF"
                 className="mt-1 block w-full rounded border border-neutral-300 bg-white px-3 py-2 text-base text-neutral-900 focus:border-neutral-900 focus:outline-none"
               >
                 {Object.entries(ID_TYPE_LABEL).map(([value, label]) => (
@@ -337,7 +359,7 @@ export function NewTransactionForm({ activeRules }: { activeRules: ActiveRuleDTO
               />
             </div>
           </div>
-        )}
+        ) : null}
       </section>
 
       {/* Bloc 3 — Remise */}

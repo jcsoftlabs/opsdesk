@@ -1,4 +1,5 @@
 import { COMPANY_NAME, COMPANY_PHONE_DISPLAY } from "@/lib/company";
+import { ID_TYPE_LABEL } from "@/lib/idType";
 
 const CHANNEL_LABEL: Record<string, string> = {
   ZELLE: "Zelle",
@@ -7,7 +8,7 @@ const CHANNEL_LABEL: Record<string, string> = {
   TRANSFER_HTG: "Virement HTG",
 };
 
-const DATE_FORMATTER = new Intl.DateTimeFormat("fr-FR", { dateStyle: "short", timeStyle: "short" });
+const DATE_FORMATTER = new Intl.DateTimeFormat("fr-FR", { dateStyle: "short", timeStyle: "short", hour12: true });
 const AMOUNT_FORMATTER = new Intl.NumberFormat("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
 export interface ReceiptData {
@@ -51,7 +52,7 @@ export function ReceiptTicket({ data, copyLabel }: { data: ReceiptData; copyLabe
 
       <div className="space-y-0.5">
         <Row label="Bénéficiaire" value={data.clientFullName} />
-        <Row label="Pièce" value={`${data.clientIdType} ${data.clientIdNumber}`} />
+        <Row label="Pièce" value={`${ID_TYPE_LABEL[data.clientIdType] ?? data.clientIdType} ${data.clientIdNumber}`} />
       </div>
 
       <hr className="my-2 border-dashed border-neutral-400" />

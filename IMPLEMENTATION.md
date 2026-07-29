@@ -135,7 +135,7 @@ User
 
 Client                       // le bénéficiaire qui se présente au guichet
   id, fullName, phone?
-  idType: NIF | CIN | PASSPORT | PERMIS | AUTRE
+  idType: NIF | NIU | PASSPORT | PERMIS | AUTRE   // NIU remplace CIN, confirmé 2026-07-28
   idNumber
   createdAt, createdById
   // index unique (idType, idNumber)
@@ -361,7 +361,7 @@ Les phases 2 (services légaux) et 3 (produits et stock) ne sont **pas** dans ce
 3. Existe-t-il un montant plafond au-delà duquel une validation du superviseur est requise ?
 4. La commission est-elle parfois négociée pour les gros montants ou les clients réguliers ? Si oui, il faut un champ de dérogation tracé et réservé au superviseur.
 5. Y a-t-il un cas où le bénéficiaire n'est pas la personne dont on prend la pièce (procuration) ?
-6. Numéro de téléphone et nom exact de l'entreprise pour l'en-tête du reçu.
+6. ~~Numéro de téléphone et nom exact de l'entreprise pour l'en-tête du reçu.~~ **Confirmé 2026-07-28 : Kmat Supply, +509 34 40 3636 / 36 00 1818.**
 7. Le fichier Excel actuel, pour écrire le script d'import.
 
 ---

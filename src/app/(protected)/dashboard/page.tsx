@@ -24,7 +24,7 @@ const CHANNEL_LABEL: Record<string, string> = {
   TRANSFER_HTG: "Virement HTG",
 };
 
-const TIME_FORMATTER = new Intl.DateTimeFormat("fr-FR", { timeStyle: "short" });
+const TIME_FORMATTER = new Intl.DateTimeFormat("fr-FR", { timeStyle: "short", hour12: true });
 const AMOUNT_FORMATTER = new Intl.NumberFormat("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
 function startOfToday(): Date {
