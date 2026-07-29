@@ -32,18 +32,18 @@ Tout est actuellement dans un fichier Excel partagé.
 
 ## 3. Architecture retenue
 
-**Application web hébergée sur Railway (cloud), accessible depuis les postes du bureau via Internet.**
+**Application web hébergée sur Vercel, base de données PostgreSQL managée sur Railway, accessible depuis les postes du bureau via Internet.**
 
 ```
-[Railway]                                   [Postes bureau]
-  Next.js (app + API)  ◀──── Internet ────▶   PC caisse 1
-  PostgreSQL (managé)                          PC caisse 2
-  Stockage objet (S3-compatible,               Téléphone Android (direction)
-    captures/pièces jointes)
-  Sauvegardes (pg_dump / snapshots Railway)
+[Vercel]              [Railway]                    [Postes bureau]
+  Next.js (app + API)   PostgreSQL (managé)           PC caisse 1
+  déploiement continu   Sauvegardes                   PC caisse 2
+  depuis GitHub          (pg_dump / snapshots)         Téléphone Android (direction)
+       │                      ▲
+       └──────── Internet ────┘
 ```
 
-**Pourquoi ce choix plutôt qu'un mini-PC local :** le client a confirmé une connexion Internet fiable, ce qui lève la contrainte de fonctionnement 100 % hors-ligne qui motivait un hébergement local. Un hébergement cloud managé simplifie l'exploitation (pas de matériel serveur à maintenir physiquement, pas d'onduleur à gérer, sauvegardes gérées par la plateforme). **Risque résiduel accepté :** en cas de coupure Internet côté bureau, la caisse est bloquée le temps de la coupure — accepté par le client compte tenu de la fiabilité de sa connexion. **On garde une seule base de données, une seule vérité.** Si l'entreprise ouvre une deuxième succursale, on réévaluera à ce moment-là.
+**Pourquoi ce choix plutôt qu'un mini-PC local :** le client a confirmé une connexion Internet fiable, ce qui lève la contrainte de fonctionnement 100 % hors-ligne qui motivait un hébergement local. Un hébergement cloud managé simplifie l'exploitation (pas de matériel serveur à maintenir physiquement, pas d'onduleur à gérer, sauvegardes gérées par la plateforme). Vercel héberge l'application (déploiement continu depuis `main` sur GitHub), Railway héberge uniquement PostgreSQL. **Risque résiduel accepté :** en cas de coupure Internet côté bureau, la caisse est bloquée le temps de la coupure — accepté par le client compte tenu de la fiabilité de sa connexion. **On garde une seule base de données, une seule vérité.** Si l'entreprise ouvre une deuxième succursale, on réévaluera à ce moment-là.
 
 Les pièces jointes (`Attachment.filePath`, §5) ne doivent **pas** être stockées sur le disque éphémère de l'instance applicative Railway — elles sont uploadées vers **Cloudinary**, et `Attachment` stocke l'identifiant public (`publicId`) et l'URL sécurisée retournée, pas un chemin disque. Les photos de pièces d'identité utilisent un accès signé/privé (pas de délivrance via une URL publique permanente), conformément à la contrainte du §10 (route authentifiée qui vérifie le rôle).
 
@@ -58,7 +58,7 @@ Les pièces jointes (`Attachment.filePath`, §5) ne doivent **pas** être stock�
 | UI | Tailwind CSS + shadcn/ui |
 | Auth | Sessions serveur (cookie httpOnly), mots de passe hachés avec argon2 |
 | Stockage fichiers | Cloudinary (captures d'écran, photos de pièces) |
-| Déploiement | Railway (app + PostgreSQL), déploiement continu depuis le dépôt git |
+| Déploiement | Vercel (app, déploiement continu depuis GitHub) + Railway (PostgreSQL managé) |
 | Tests | Vitest (logique métier), Playwright (parcours critiques) |
 
 **Contrainte : aucune dépendance à un service externe non maîtrisé au moment de la transaction.** Pas de CDN bloquant, pas d'appel API tiers dans le chemin critique de calcul/paiement.
