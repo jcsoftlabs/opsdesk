@@ -1,5 +1,6 @@
 import { requireRoleOrRedirect } from "@/lib/auth";
 import { prisma } from "@/lib/db";
+import { AuditLogExport } from "./AuditLogExport";
 
 const DATE_FORMATTER = new Intl.DateTimeFormat("fr-FR", {
   dateStyle: "short",
@@ -22,6 +23,17 @@ export default async function AuditLogPage() {
       <p className="text-sm text-neutral-500">
         200 dernières entrées. Registre en lecture seule (append-only, imposé en base).
       </p>
+
+      <div className="flex justify-end">
+        <AuditLogExport
+          rows={entries.map((entry) => ({
+            date: DATE_FORMATTER.format(entry.createdAt),
+            user: entry.user.fullName,
+            action: entry.action,
+            entity: `${entry.entityType}#${entry.entityId.slice(0, 8)}`,
+          }))}
+        />
+      </div>
 
       <div className="overflow-x-auto rounded-lg border border-neutral-200 bg-white">
         <table className="w-full text-left text-sm">

@@ -83,16 +83,17 @@ model User {
   failedLoginCount   Int       @default(0)
   lockedUntil        DateTime?
 
-  createdClients        Client[]       @relation("ClientCreatedBy")
-  createdTransactions   Transaction[]  @relation("TransactionCreatedBy")
-  verifiedTransactions  Transaction[]  @relation("TransactionVerifiedBy")
-  paidTransactions      Transaction[]  @relation("TransactionPaidBy")
-  cancelledTransactions Transaction[]  @relation("TransactionCancelledBy")
+  createdClients        Client[]        @relation("ClientCreatedBy")
+  createdTransactions   Transaction[]   @relation("TransactionCreatedBy")
+  verifiedTransactions  Transaction[]   @relation("TransactionVerifiedBy")
+  paidTransactions      Transaction[]   @relation("TransactionPaidBy")
+  cancelledTransactions Transaction[]   @relation("TransactionCancelledBy")
   uploadedAttachments   Attachment[]
   openedCashSessions    CashSession[]
   cashMovements         CashMovement[]
   auditLogs             AuditLog[]
   createdPricingRules   PricingRule[]
+  createdReferenceRates ReferenceRate[]
 
   @@map("users")
 }
@@ -113,6 +114,24 @@ model Client {
 
   @@unique([idType, idNumber])
   @@map("clients")
+}
+
+// Taux de change de référence du marché, saisi par l'admin (§7.8), utilisé
+// pour calculer la marge de change — indépendant du taux appliqué au client
+// (PricingRule.exchangeRate). Même logique de versionnement (jamais d'update).
+model ReferenceRate {
+  id            String    @id @default(cuid())
+  rate          Decimal   @db.Decimal(10, 4)
+  effectiveFrom DateTime  @default(now())
+  effectiveTo   DateTime?
+
+  createdById String
+  createdBy   User   @relation(fields: [createdById], references: [id])
+
+  createdAt DateTime @default(now())
+
+  @@index([effectiveTo])
+  @@map("reference_rates")
 }
 
 model PricingRule {

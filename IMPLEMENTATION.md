@@ -97,6 +97,8 @@ PricingRule
   createdById        String
 ```
 
+`ReferenceRate` suit le même principe de versionnement (jamais d'update, clôture + insertion) : c'est le taux de marché saisi par l'admin (§7.8), indépendant du taux appliqué au client, utilisé uniquement pour calculer la marge de change dans les rapports.
+
 Une modification **ne met jamais à jour une ligne existante** : elle clôt la règle courante (`effectiveTo = now`) et en insère une nouvelle. L'historique des taux est un actif comptable.
 
 **Instabilité monétaire (confirmé par le client, 2026-07-28) :** le taux de change peut varier fréquemment. C'est exactement ce que le versionnement de `PricingRule` est conçu pour absorber — l'admin change le taux depuis l'écran de grille tarifaire (§7.7) à tout moment, sans déploiement de code, et chaque transaction garde le taux réellement appliqué au moment où elle a été créée.
@@ -297,6 +299,7 @@ Bouton **Enregistrer** → statut `RECEIVED`.
 - Journalier : volume transféré par canal et par devise, total des frais encaissés, **marge de change** (différence entre le taux appliqué au client et le taux de référence du marché saisi par l'administrateur), écarts de caisse.
 - Mensuel : mêmes indicateurs agrégés, par caissier.
 - Export Excel de toute liste affichée. **Important pour la conduite du changement** : ils doivent sentir qu'ils ne perdent rien de leurs habitudes.
+  - **Choix technique** : export en CSV (avec BOM UTF-8, séparateur `;`) plutôt qu'un vrai `.xlsx` généré par une librairie (`xlsx`/`exceljs`). Excel ouvre le CSV nativement — même expérience utilisateur — sans les vulnérabilités de sécurité connues des générateurs `.xlsx` disponibles sur npm à cette date. Implémenté sur : tableau de bord, journal d'audit, rapport journalier, rapport mensuel.
 
 ---
 
@@ -339,7 +342,7 @@ Bouton **Enregistrer** → statut `RECEIVED`.
 | **M3** | Création de transaction, anti-doublon, pièces jointes, clients | Une référence déjà utilisée est refusée avec un message clair |
 | **M4** | Vérification, paiement, reçu imprimable | Un paiement sans caisse ouverte est impossible |
 | **M5** | Ouverture / clôture de caisse, mouvements, écarts | Le solde théorique correspond aux mouvements de la journée |
-| **M6** | Rapports, export Excel, écran de grille tarifaire | Le changement de taux n'altère aucune transaction passée |
+| **M6** ✅ | Rapports, export Excel, écran de grille tarifaire | Le changement de taux n'altère aucune transaction passée — vérifié : l'ancienne règle Zelle→HTG à 133 reste inchangée sur les transactions déjà créées après passage à 135 |
 | **M7** | Import de l'historique Excel, sauvegardes, déploiement Docker, formation | Restauration complète testée sur une machine vierge |
 
 Les phases 2 (services légaux) et 3 (produits et stock) ne sont **pas** dans ce périmètre. Conçois toutefois `CashSession` et `CashMovement` pour accueillir plus tard des mouvements d'autres origines — c'est déjà prévu par le champ `reason`.

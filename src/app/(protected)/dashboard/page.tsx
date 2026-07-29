@@ -2,6 +2,7 @@ import Link from "next/link";
 import { requireUserOrRedirect } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import type { TransactionStatus } from "@/generated/prisma/client";
+import { DashboardExport } from "./DashboardExport";
 
 const STATUS_LABEL: Record<TransactionStatus, string> = {
   RECEIVED: "Reçue",
@@ -96,7 +97,21 @@ export default async function DashboardPage({
         ))}
       </div>
 
-      <div className="mt-4 overflow-hidden rounded-lg border border-neutral-200 bg-white">
+      <div className="mt-4 flex justify-end">
+        <DashboardExport
+          rows={transactions.map((t) => ({
+            time: TIME_FORMATTER.format(t.createdAt),
+            receiptNo: t.receiptNo,
+            channel: CHANNEL_LABEL[t.channel],
+            client: t.client.fullName,
+            netPayout: t.netPayout.toString(),
+            payoutCurrency: t.payoutCurrency,
+            status: STATUS_LABEL[t.status],
+          }))}
+        />
+      </div>
+
+      <div className="mt-2 overflow-hidden rounded-lg border border-neutral-200 bg-white">
         <table className="w-full text-left text-sm">
           <thead className="border-b border-neutral-200 bg-neutral-50 text-xs uppercase text-neutral-500">
             <tr>
