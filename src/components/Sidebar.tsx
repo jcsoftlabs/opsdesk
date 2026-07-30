@@ -1,4 +1,7 @@
+"use client";
+
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { logoutAction } from "@/app/login/actions";
 import type { CurrentUser } from "@/lib/auth";
 
@@ -64,6 +67,7 @@ const NAV_ICONS = {
 };
 
 export function Sidebar({ user }: { user: CurrentUser }) {
+  const pathname = usePathname();
   const navItems = [
     { href: "/dashboard", label: "Tableau de bord", icon: NAV_ICONS.dashboard },
     { href: "/transactions/new", label: "Nouvelle transaction", icon: NAV_ICONS.newTransaction },
@@ -90,16 +94,24 @@ export function Sidebar({ user }: { user: CurrentUser }) {
       </div>
 
       <nav className="flex-1 space-y-1 px-3">
-        {navItems.map((item) => (
-          <Link
-            key={item.href}
-            href={item.href}
-            className="flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium text-neutral-600 transition-colors hover:bg-neutral-100 hover:text-neutral-900"
-          >
-            {item.icon}
-            {item.label}
-          </Link>
-        ))}
+        {navItems.map((item) => {
+          const active = pathname === item.href || pathname?.startsWith(`${item.href}/`);
+          return (
+            <Link
+              key={item.href}
+              href={item.href}
+              aria-current={active ? "page" : undefined}
+              className={
+                active
+                  ? "flex items-center gap-3 rounded-md bg-neutral-100 px-3 py-2 text-sm font-medium text-neutral-900"
+                  : "flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium text-neutral-600 transition-colors hover:bg-neutral-100 hover:text-neutral-900"
+              }
+            >
+              {item.icon}
+              {item.label}
+            </Link>
+          );
+        })}
       </nav>
 
       <div className="border-t border-neutral-200 p-3">

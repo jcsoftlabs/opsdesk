@@ -92,9 +92,14 @@ export default async function MonthlyReportPage({
     <main className="mx-auto max-w-4xl space-y-6 p-8">
       <div className="flex items-center justify-between">
         <h1 className="text-lg font-semibold text-neutral-900">Rapport mensuel par caissier</h1>
-        <Link href="/reports" className="text-sm text-neutral-600 underline">
-          Voir le rapport journalier
-        </Link>
+        <div className="flex gap-4 text-sm">
+          <Link href="/reports" className="text-neutral-600 underline">
+            Voir le rapport journalier
+          </Link>
+          <Link href="/reports/weekly" className="text-neutral-600 underline">
+            Voir le rapport hebdomadaire
+          </Link>
+        </div>
       </div>
 
       <div className="flex items-center gap-3">

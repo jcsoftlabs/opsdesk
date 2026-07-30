@@ -44,7 +44,7 @@ export default async function AdminUsersPage() {
                   <span
                     className={
                       user.active
-                        ? "rounded bg-green-100 px-2 py-0.5 text-xs text-green-800"
+                        ? "rounded bg-green-100 px-2 py-0.5 text-xs font-medium text-green-900"
                         : "rounded bg-neutral-200 px-2 py-0.5 text-xs text-neutral-600"
                     }
                   >

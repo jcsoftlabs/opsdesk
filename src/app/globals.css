@@ -25,6 +25,18 @@ body {
   font-family: Arial, Helvetica, sans-serif;
 }
 
+/* Accessibilité : focus clavier visible et cohérent sur tous les éléments
+   interactifs, sans halo au clic souris (:focus-visible). */
+a:focus-visible,
+button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
+[tabindex]:focus-visible {
+  outline: 2px solid #171717;
+  outline-offset: 2px;
+}
+
 /* Reçu imprimable (§7.5) : ticket 80mm, un exemplaire par page à l'impression. */
 @media print {
   aside {

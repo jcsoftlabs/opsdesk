@@ -132,6 +132,7 @@ export function NewTransactionForm({ activeRules }: { activeRules: ActiveRuleDTO
               <button
                 key={c}
                 type="button"
+                aria-pressed={channel === c}
                 onClick={() => handleChannelSelect(c)}
                 className={
                   channel === c
@@ -340,6 +341,7 @@ export function NewTransactionForm({ activeRules }: { activeRules: ActiveRuleDTO
                   key={cur}
                   type="button"
                   disabled={disabled}
+                  aria-pressed={payoutCurrency === cur}
                   onClick={() => setPayoutCurrency(cur)}
                   className={
                     payoutCurrency === cur

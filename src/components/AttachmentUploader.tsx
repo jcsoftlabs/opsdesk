@@ -75,7 +75,16 @@ export function AttachmentUploader({ label, hint, onUploaded, onRemoved }: Attac
       {hint ? <p className="text-xs text-neutral-500">{hint}</p> : null}
 
       <div
+        role="button"
+        tabIndex={0}
+        aria-label={`${label} — glisser-déposer ou appuyer sur Entrée pour choisir un fichier`}
         onClick={() => inputRef.current?.click()}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            inputRef.current?.click();
+          }
+        }}
         onDragOver={(e) => e.preventDefault()}
         onDrop={(e) => {
           e.preventDefault();
@@ -90,6 +99,8 @@ export function AttachmentUploader({ label, hint, onUploaded, onRemoved }: Attac
           accept="image/*"
           capture="environment"
           multiple
+          aria-label={label}
+          tabIndex={-1}
           className="hidden"
           onChange={(e) => handleFiles(e.target.files)}
         />

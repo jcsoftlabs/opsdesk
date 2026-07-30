@@ -4,8 +4,8 @@ import { requireRoleOrRedirect } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { getReferenceRateAt } from "@/lib/referenceRate";
 import { computeReportMetrics } from "@/lib/reportMetrics";
-import { addDays, parseDateParam as parseDateParamOrNull, startOfDay, toDateParam } from "@/lib/businessWeek";
-import { DailyReportExport } from "./DailyReportExport";
+import { addDays, businessWeekRange, nextMonday, parseDateParam, startOfDay, toDateParam } from "@/lib/businessWeek";
+import { WeeklyReportExport } from "./WeeklyReportExport";
 
 export const dynamic = "force-dynamic";
 
@@ -16,13 +16,10 @@ const CHANNEL_LABEL: Record<string, string> = {
   TRANSFER_HTG: "Virement HTG",
 };
 
+const DATE_FORMATTER = new Intl.DateTimeFormat("fr-FR", { dateStyle: "short" });
 const AMOUNT_FORMATTER = new Intl.NumberFormat("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
-function parseDateParam(value: string | undefined): Date {
-  return parseDateParamOrNull(value) ?? startOfDay(new Date());
-}
-
-export default async function DailyReportPage({
+export default async function WeeklyReportPage({
   searchParams,
 }: {
   searchParams: Promise<{ date?: string }>;
@@ -30,22 +27,22 @@ export default async function DailyReportPage({
   await requireRoleOrRedirect(["SUPERVISOR", "ADMIN"]);
   const { date: dateParam } = await searchParams;
 
-  const day = parseDateParam(dateParam);
-  const dayStart = day;
-  const dayEnd = addDays(day, 1);
-  const prevDay = addDays(day, -1);
-  const nextDay = addDays(day, 1);
+  const anchor = parseDateParam(dateParam) ?? startOfDay(new Date());
+  const { from: weekStart, to: weekEnd } = businessWeekRange(anchor);
+  const weekEndInclusive = addDays(weekEnd, -1); // samedi
+  const prevWeekAnchor = addDays(weekStart, -1);
+  const nextWeekAnchor = nextMonday(weekStart);
 
   const [transactions, closedSessions, referenceRate] = await Promise.all([
     prisma.transaction.findMany({
-      where: { createdAt: { gte: dayStart, lt: dayEnd } },
+      where: { createdAt: { gte: weekStart, lt: weekEnd } },
       include: { createdBy: { select: { fullName: true } }, client: { select: { fullName: true } } },
       orderBy: { createdAt: "asc" },
     }),
     prisma.cashSession.findMany({
-      where: { status: "CLOSED", closedAt: { gte: dayStart, lt: dayEnd } },
+      where: { status: "CLOSED", closedAt: { gte: weekStart, lt: weekEnd } },
     }),
-    getReferenceRateAt(dayEnd),
+    getReferenceRateAt(weekEnd),
   ]);
 
   const metrics = computeReportMetrics(
@@ -70,8 +67,19 @@ export default async function DailyReportPage({
     { usd: new Decimal(0), htg: new Decimal(0) },
   );
 
+  // Volume par jour ouvré (lundi-samedi) — utile pour repérer les jours creux/forts.
+  const dayLabels = ["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam"];
+  const byDay = dayLabels.map((label, i) => {
+    const dayStart = addDays(weekStart, i);
+    const dayEnd = addDays(weekStart, i + 1);
+    const dayTx = transactions.filter((t) => t.createdAt >= dayStart && t.createdAt < dayEnd && t.status !== "CANCELLED");
+    const total = dayTx.reduce((acc, t) => acc.plus(t.amountReceived.toString()), new Decimal(0));
+    return { label, date: dayStart, count: dayTx.length, total };
+  });
+
   const exportRows = transactions.map((t) => ({
     receiptNo: t.receiptNo,
+    date: DATE_FORMATTER.format(t.createdAt),
     channel: CHANNEL_LABEL[t.channel] ?? t.channel,
     client: t.client.fullName,
     amountReceived: t.amountReceived.toString(),
@@ -86,10 +94,10 @@ export default async function DailyReportPage({
   return (
     <main className="mx-auto max-w-4xl space-y-6 p-8">
       <div className="flex items-center justify-between">
-        <h1 className="text-lg font-semibold text-neutral-900">Rapport journalier</h1>
+        <h1 className="text-lg font-semibold text-neutral-900">Rapport hebdomadaire</h1>
         <div className="flex gap-4 text-sm">
-          <Link href="/reports/weekly" className="text-neutral-600 underline">
-            Voir le rapport hebdomadaire
+          <Link href="/reports" className="text-neutral-600 underline">
+            Voir le rapport journalier
           </Link>
           <Link href="/reports/monthly" className="text-neutral-600 underline">
             Voir le rapport mensuel
@@ -99,19 +107,45 @@ export default async function DailyReportPage({
 
       <div className="flex items-center gap-3">
         <Link
-          href={`/reports?date=${toDateParam(prevDay)}`}
+          href={`/reports/weekly?date=${toDateParam(prevWeekAnchor)}`}
           className="rounded border border-neutral-300 px-3 py-1.5 text-sm text-neutral-700 hover:bg-neutral-50"
         >
-          ← Veille
+          ← Semaine précédente
         </Link>
-        <span className="text-sm font-medium text-neutral-900">{toDateParam(day)}</span>
+        <span className="text-sm font-medium text-neutral-900">
+          {DATE_FORMATTER.format(weekStart)} – {DATE_FORMATTER.format(weekEndInclusive)} (lun-sam)
+        </span>
         <Link
-          href={`/reports?date=${toDateParam(nextDay)}`}
+          href={`/reports/weekly?date=${toDateParam(nextWeekAnchor)}`}
           className="rounded border border-neutral-300 px-3 py-1.5 text-sm text-neutral-700 hover:bg-neutral-50"
         >
-          Lendemain →
+          Semaine suivante →
         </Link>
       </div>
+
+      <section className="rounded-lg border border-neutral-200 bg-white p-5">
+        <h2 className="font-medium text-neutral-900">Volume par jour</h2>
+        <table className="mt-2 w-full text-left text-sm">
+          <thead className="border-b border-neutral-200 text-xs uppercase text-neutral-500">
+            <tr>
+              <th className="py-1">Jour</th>
+              <th className="py-1">Nb</th>
+              <th className="py-1">Montant reçu (toutes devises confondues)</th>
+            </tr>
+          </thead>
+          <tbody>
+            {byDay.map((d) => (
+              <tr key={d.label} className="border-b border-neutral-100 last:border-0">
+                <td className="py-1 text-neutral-700">
+                  {d.label} {DATE_FORMATTER.format(d.date)}
+                </td>
+                <td className="py-1 text-neutral-700">{d.count}</td>
+                <td className="py-1 text-neutral-900">{AMOUNT_FORMATTER.format(d.total.toNumber())}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </section>
 
       <section className="rounded-lg border border-neutral-200 bg-white p-5">
         <h2 className="font-medium text-neutral-900">Volume par canal et par devise</h2>
@@ -136,7 +170,7 @@ export default async function DailyReportPage({
             {metrics.volumeByChannel.length === 0 ? (
               <tr>
                 <td colSpan={4} className="py-4 text-center text-neutral-400">
-                  Aucune transaction ce jour-là.
+                  Aucune transaction cette semaine.
                 </td>
               </tr>
             ) : null}
@@ -163,13 +197,10 @@ export default async function DailyReportPage({
           <p className="mt-1 font-mono text-lg text-neutral-900">
             {metrics.exchangeMarginHtg ? AMOUNT_FORMATTER.format(metrics.exchangeMarginHtg.toNumber()) : "—"}
           </p>
-          {!metrics.exchangeMarginHtg ? (
-            <p className="mt-1 text-xs text-neutral-400">Taux de référence non renseigné pour cette date.</p>
-          ) : null}
         </div>
 
         <div className="rounded-lg border border-neutral-200 bg-white p-4">
-          <p className="text-xs text-neutral-500">Écarts de caisse (sessions clôturées ce jour)</p>
+          <p className="text-xs text-neutral-500">Écarts de caisse (sessions clôturées)</p>
           <p className="mt-1 font-mono text-sm text-neutral-900">
             {AMOUNT_FORMATTER.format(varianceTotals.usd.toNumber())} USD /{" "}
             {AMOUNT_FORMATTER.format(varianceTotals.htg.toNumber())} HTG
@@ -177,7 +208,7 @@ export default async function DailyReportPage({
         </div>
       </section>
 
-      <DailyReportExport date={toDateParam(day)} rows={exportRows} />
+      <WeeklyReportExport week={toDateParam(weekStart)} rows={exportRows} />
     </main>
   );
 }
