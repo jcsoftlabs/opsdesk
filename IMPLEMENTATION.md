@@ -199,6 +199,15 @@ AuditLog                     // append-only, jamais de UPDATE ni DELETE
   id, userId, action, entityType, entityId
   beforeJson?, afterJson?
   ipAddress?, createdAt
+
+MobileMoneyOperation          // cahier BRH agent MonCash/NatCash — distinct de Transaction (§7.9)
+  id
+  provider: MONCASH | NATCASH
+  operationType: RETRAIT | DEPOT | TRANSFERT
+  clientNumber                // numéro du client au guichet
+  destinataireNumber?         // uniquement pour TRANSFERT
+  amount: Decimal             // HTG uniquement
+  createdById, createdAt      // append-only, jamais de UPDATE ni DELETE
 ```
 
 ### Règles d'intégrité à imposer en base, pas seulement en code
@@ -302,6 +311,20 @@ Bouton **Enregistrer** → statut `RECEIVED`.
 - Mensuel : mêmes indicateurs agrégés, par caissier.
 - Export Excel de toute liste affichée. **Important pour la conduite du changement** : ils doivent sentir qu'ils ne perdent rien de leurs habitudes.
   - **Choix technique** : export en CSV (avec BOM UTF-8, séparateur `;`) plutôt qu'un vrai `.xlsx` généré par une librairie (`xlsx`/`exceljs`). Excel ouvre le CSV nativement — même expérience utilisateur — sans les vulnérabilités de sécurité connues des générateurs `.xlsx` disponibles sur npm à cette date. Implémenté sur : tableau de bord, journal d'audit, rapport journalier, rapport mensuel.
+
+### 7.9 Registre MonCash / NatCash
+
+**Confirmé par le client (2026-08-16).** L'entreprise agit aussi comme agent MonCash (Digicel) et NatCash (Natcom) : la BRH impose aux agents de tenir un cahier listant toutes les opérations effectuées au guichet. C'est un processus **distinct** du transfert diaspora (`Transaction`) : pas d'identité client vérifiée par pièce, pas de calcul de frais côté OpsDesk (les frais MonCash/NatCash sont fixés par le réseau, non modifiables par l'agent, connus de tous), pas de mouvement de caisse OpsDesk (l'agent gère son solde MonCash/NatCash séparément). Modélisé par un modèle Prisma dédié, `MobileMoneyOperation`, pas une extension du `Channel` existant.
+
+Trois types d'opération, avec les champs exigés par la BRH :
+- **Retrait** (client retire de son compte) : numéro du client + montant.
+- **Dépôt** (client dépose sur son compte) : numéro du client + montant.
+- **Transfert** (client envoie à un autre client du réseau, au guichet) : numéro du client + numéro du destinataire + montant.
+
+Règles retenues :
+- Montants en **gourdes (HTG) uniquement**.
+- Registre **append-only** : comme `audit_logs`, une opération enregistrée ne peut plus être modifiée ni supprimée (contrainte imposée en base par trigger, pas seulement côté application) — cohérent avec la nature d'un cahier physique.
+- Écran dédié `/mobile-money`, accessible à tous les rôles authentifiés (CASHIER compris, ce sont eux qui tiennent le cahier au quotidien) : formulaire de saisie + liste du jour avec filtres (réseau, type d'opération, navigation jour par jour) + export Excel (même mécanisme CSV que les autres rapports, cf. §7.8).
 
 ---
 

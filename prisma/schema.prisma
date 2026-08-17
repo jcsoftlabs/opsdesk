@@ -70,6 +70,17 @@ enum CashMovementReason {
   OTHER
 }
 
+enum MobileMoneyProvider {
+  MONCASH
+  NATCASH
+}
+
+enum MobileMoneyOperationType {
+  RETRAIT
+  DEPOT
+  TRANSFERT
+}
+
 model User {
   id           String   @id @default(cuid())
   fullName     String
@@ -94,6 +105,7 @@ model User {
   auditLogs             AuditLog[]
   createdPricingRules   PricingRule[]
   createdReferenceRates ReferenceRate[]
+  mobileMoneyOperations MobileMoneyOperation[]
 
   @@map("users")
 }
@@ -288,6 +300,35 @@ model CashMovement {
 
   @@index([cashSessionId])
   @@map("cash_movements")
+}
+
+// Registre BRH des opérations MonCash/NatCash (cahier obligatoire des agents
+// de monnaie mobile), distinct des transferts diaspora : pas de calcul de
+// frais (les frais sont fixés par le réseau MonCash/NatCash lui-même, non
+// modifiables par l'agent), pas de mouvement de caisse propre à OpsDesk, HTG
+// uniquement. Append-only comme audit_logs : un cahier ne se corrige pas
+// après coup. Confirmé par le client (2026-08-16).
+model MobileMoneyOperation {
+  id            String                    @id @default(cuid())
+  provider      MobileMoneyProvider
+  operationType MobileMoneyOperationType
+
+  // Numéro du client venu au guichet (retrait, dépôt ou transfert).
+  clientNumber String
+
+  // Renseigné uniquement pour un TRANSFERT (client du réseau qui envoie à un
+  // autre client du même réseau, au guichet).
+  destinataireNumber String?
+
+  amount Decimal @db.Decimal(18, 2)
+
+  createdById String
+  createdBy   User     @relation(fields: [createdById], references: [id])
+  createdAt   DateTime @default(now())
+
+  @@index([provider, createdAt])
+  @@index([clientNumber])
+  @@map("mobile_money_operations")
 }
 
 model AuditLog {

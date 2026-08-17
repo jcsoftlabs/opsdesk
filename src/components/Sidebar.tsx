@@ -64,6 +64,15 @@ const NAV_ICONS = {
       <path strokeLinecap="round" strokeLinejoin="round" d="M12 8c-1.66 0-3 .67-3 1.5S10.34 11 12 11s3 .67 3 1.5-1.34 1.5-3 1.5m0-6V6m0 8v1m0-9c1.11 0 2.08.402 2.599 1M8.5 3.5A9 9 0 1015.5 3.5" />
     </svg>
   ),
+  mobileMoney: (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="h-5 w-5">
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        d="M7 4h10a1 1 0 011 1v14a1 1 0 01-1 1H7a1 1 0 01-1-1V5a1 1 0 011-1zm3 14h4"
+      />
+    </svg>
+  ),
 };
 
 export function Sidebar({ user }: { user: CurrentUser }) {
@@ -73,6 +82,7 @@ export function Sidebar({ user }: { user: CurrentUser }) {
     { href: "/transactions/new", label: "Nouvelle transaction", icon: NAV_ICONS.newTransaction },
     { href: "/transactions/pending", label: "Vérification / paiement", icon: NAV_ICONS.pending },
     { href: "/cash-session", label: "Caisse", icon: NAV_ICONS.cash },
+    { href: "/mobile-money", label: "MonCash / NatCash", icon: NAV_ICONS.mobileMoney },
   ];
   if (user.role === "SUPERVISOR" || user.role === "ADMIN") {
     navItems.push({ href: "/reports", label: "Rapports", icon: NAV_ICONS.reports });
