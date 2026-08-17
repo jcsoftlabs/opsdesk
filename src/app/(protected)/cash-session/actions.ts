@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import Decimal from "decimal.js";
 import { prisma } from "@/lib/db";
-import { requireUser, requireRole } from "@/lib/auth";
+import { requireUser, requireRole, requireBureauId } from "@/lib/auth";
 import { recordAuditLog } from "@/lib/audit";
 
 // Caisse commune : les agents qui traitent les transactions ne gèrent pas leur
@@ -20,8 +20,9 @@ export async function openCashSessionAction(
 ): Promise<OpenCashSessionState> {
   const user = await requireUser();
   requireRole(user, ["ADMIN"]);
+  const bureauId = requireBureauId(user);
 
-  const existing = await prisma.cashSession.findFirst({ where: { status: "OPEN" } });
+  const existing = await prisma.cashSession.findFirst({ where: { bureauId, status: "OPEN" } });
   if (existing) return { error: "Une caisse commune est déjà ouverte." };
 
   const openingUsdRaw = String(formData.get("openingUsd") ?? "0").trim();
@@ -35,6 +36,7 @@ export async function openCashSessionAction(
 
   const session = await prisma.cashSession.create({
     data: {
+      bureauId,
       openedById: user.id,
       openingUsd: openingUsdRaw,
       openingHtg: openingHtgRaw,
@@ -43,6 +45,7 @@ export async function openCashSessionAction(
 
   await recordAuditLog({
     userId: user.id,
+    organizationId: user.organizationId,
     action: "CASH_SESSION_OPENED",
     entityType: "CashSession",
     entityId: session.id,
@@ -133,6 +136,7 @@ export async function closeCashSessionAction(
 
   await recordAuditLog({
     userId: user.id,
+    organizationId: user.organizationId,
     action: "CASH_SESSION_CLOSED",
     entityType: "CashSession",
     entityId: cashSessionId,
@@ -163,6 +167,7 @@ export async function addCashTopUpAction(
 ): Promise<AddTopUpState> {
   const user = await requireUser();
   requireRole(user, ["ADMIN"]);
+  const bureauId = requireBureauId(user);
 
   const currency = String(formData.get("currency") ?? "");
   const amountRaw = String(formData.get("amount") ?? "").trim();
@@ -172,12 +177,13 @@ export async function addCashTopUpAction(
   const amount = Number(amountRaw);
   if (!Number.isFinite(amount) || amount <= 0) return { error: "Montant invalide" };
 
-  const session = await prisma.cashSession.findFirst({ where: { status: "OPEN" } });
+  const session = await prisma.cashSession.findFirst({ where: { bureauId, status: "OPEN" } });
   if (!session) return { error: "Aucune caisse commune ouverte." };
 
   await prisma.cashMovement.create({
     data: {
       cashSessionId: session.id,
+      bureauId,
       direction: "IN",
       currency: currency as "USD" | "HTG",
       amount: amountRaw,
@@ -189,6 +195,7 @@ export async function addCashTopUpAction(
 
   await recordAuditLog({
     userId: user.id,
+    organizationId: user.organizationId,
     action: "CASH_TOPUP_ADDED",
     entityType: "CashSession",
     entityId: session.id,

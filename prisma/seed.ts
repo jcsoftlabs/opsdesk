@@ -9,7 +9,28 @@ import { PRICING_GRID } from "../src/lib/pricing-rules.seed";
 const adapter = new PrismaPg({ connectionString: process.env.DATABASE_URL });
 const prisma = new PrismaClient({ adapter });
 
-async function seedAdmin() {
+// Bootstrap SaaS multi-bureaux (§15) : une base fraîche n'a ni Organization
+// ni Bureau — on en crée un par défaut pour que le seed reste utilisable en
+// développement local.
+async function seedOrganizationAndBureau() {
+  const existing = await prisma.organization.findFirst();
+  if (existing) {
+    const bureau = await prisma.bureau.findFirstOrThrow({ where: { organizationId: existing.id } });
+    console.log(`Organization "${existing.name}" déjà présente, ignorée.`);
+    return { organization: existing, bureau };
+  }
+
+  const organization = await prisma.organization.create({
+    data: { name: "Organisation de démonstration", billingRatePerBureau: "0" },
+  });
+  const bureau = await prisma.bureau.create({
+    data: { organizationId: organization.id, name: "Bureau principal" },
+  });
+  console.log(`Organization "${organization.name}" et Bureau "${bureau.name}" créés.`);
+  return { organization, bureau };
+}
+
+async function seedAdmin(organizationId: string, bureauId: string) {
   const username = process.env.SEED_ADMIN_USERNAME ?? "admin";
   const existing = await prisma.user.findUnique({ where: { username } });
   if (existing) {
@@ -27,6 +48,8 @@ async function seedAdmin() {
       passwordHash,
       role: "ADMIN",
       mustChangePassword: true,
+      organizationId,
+      bureauId,
     },
   });
 
@@ -34,10 +57,10 @@ async function seedAdmin() {
   return admin;
 }
 
-async function seedPricingGrid(adminId: string) {
+async function seedPricingGrid(organizationId: string, adminId: string) {
   for (const rule of PRICING_GRID) {
     const active = await prisma.pricingRule.findFirst({
-      where: { channel: rule.channel, payoutCurrency: rule.payoutCurrency, effectiveTo: null },
+      where: { organizationId, channel: rule.channel, payoutCurrency: rule.payoutCurrency, effectiveTo: null },
     });
     if (active) {
       console.log(`Règle déjà active pour ${rule.channel} → ${rule.payoutCurrency}, ignorée.`);
@@ -46,6 +69,7 @@ async function seedPricingGrid(adminId: string) {
 
     await prisma.pricingRule.create({
       data: {
+        organizationId,
         channel: rule.channel,
         payoutCurrency: rule.payoutCurrency,
         allowed: rule.allowed,
@@ -61,8 +85,9 @@ async function seedPricingGrid(adminId: string) {
 }
 
 async function main() {
-  const admin = await seedAdmin();
-  await seedPricingGrid(admin.id);
+  const { organization, bureau } = await seedOrganizationAndBureau();
+  const admin = await seedAdmin(organization.id, bureau.id);
+  await seedPricingGrid(organization.id, admin.id);
 }
 
 main()

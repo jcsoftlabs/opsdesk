@@ -42,6 +42,7 @@ export async function changePasswordAction(
 
   await recordAuditLog({
     userId: user.id,
+    organizationId: user.organizationId,
     action: "PASSWORD_CHANGED",
     entityType: "User",
     entityId: user.id,

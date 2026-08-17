@@ -46,6 +46,7 @@ export async function loginAction(_prevState: LoginState, formData: FormData): P
     if (shouldLock) {
       await recordAuditLog({
         userId: user.id,
+        organizationId: user.organizationId,
         action: "LOGIN_LOCKED",
         entityType: "User",
         entityId: user.id,
@@ -72,6 +73,7 @@ export async function loginAction(_prevState: LoginState, formData: FormData): P
 
   await recordAuditLog({
     userId: user.id,
+    organizationId: user.organizationId,
     action: "LOGIN_SUCCESS",
     entityType: "User",
     entityId: user.id,
@@ -87,6 +89,7 @@ export async function logoutAction(): Promise<void> {
   if (user) {
     await recordAuditLog({
       userId: user.id,
+      organizationId: user.organizationId,
       action: "LOGOUT",
       entityType: "User",
       entityId: user.id,

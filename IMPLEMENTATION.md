@@ -372,6 +372,10 @@ Règles retenues :
 | **M5** | Ouverture / clôture de caisse, mouvements, écarts | Le solde théorique correspond aux mouvements de la journée |
 | **M6** ✅ | Rapports, export Excel, écran de grille tarifaire | Le changement de taux n'altère aucune transaction passée — vérifié : l'ancienne règle Zelle→HTG à 133 reste inchangée sur les transactions déjà créées après passage à 135 |
 | **M7** | Import de l'historique Excel, sauvegardes, déploiement Docker, formation | Restauration complète testée sur une machine vierge |
+| **M8** ✅ | Socle SaaS multi-bureaux : schéma Organization/Bureau/PlatformAdmin/Invoice, migration des données Kmat Supply, aides d'authentification (`requireBureauId`) | `tsc`/`build`/tests verts, aucune régression écran malgré le changement de schéma — voir §15 |
+| **M9** | Sweep de scoping : chaque requête Prisma des écrans existants filtrée par bureau/organisation, sélecteur de bureau actif pour les utilisateurs org-wide | Deux bureaux du même propriétaire ne voient jamais les données l'un de l'autre |
+| **M10** | Écrans de gestion Organization/Bureau (créer un bureau, inviter des utilisateurs rattachés à un bureau), sélecteur de bureau dans la sidebar, infos entreprise dynamiques sur le reçu | Un propriétaire peut créer un deuxième bureau et y rattacher un caissier sans intervention technique |
+| **M11** | Console plateforme (`/platform/*`) : créer des organisations, tableau de bord facturation par caisse active, marquer une facture payée, suspension d'accès si impayé | Le nombre de caisses facturées correspond au nombre de bureaux actifs de l'organisation |
 
 Les phases 2 (services légaux) et 3 (produits et stock) ne sont **pas** dans ce périmètre. Conçois toutefois `CashSession` et `CashMovement` pour accueillir plus tard des mouvements d'autres origines — c'est déjà prévu par le champ `reason`.
 
@@ -402,3 +406,19 @@ Les phases 2 (services légaux) et 3 (produits et stock) ne sont **pas** dans ce
 ## 14. Remarque de conformité
 
 Cette activité relève de la réglementation des transferts de fonds en Haïti. Le système conserve un historique complet et inaltérable des opérations, des pièces d'identité et des montants — ce qui va dans le sens des obligations de conservation. Vérifier auprès de la BRH les exigences applicables (durée de conservation, seuils de déclaration) et les intégrer avant la mise en production. **Ne rien promettre au client en matière de conformité tant que ce point n'est pas vérifié.**
+
+---
+
+## 15. SaaS multi-bureaux (M8)
+
+**Confirmé par le client (2026-08-16).** OpsDesk devient vendable à d'autres maisons de transfert. Un propriétaire (`Organization`) peut posséder plusieurs bureaux (`Bureau`), chacun avec sa propre caisse commune. Facturation **par caisse active** (donc par bureau), suivi interne, encaissement manuel — pas d'intégration de paiement automatisée pour l'instant.
+
+Décisions retenues :
+- **Kmat Supply est le premier tenant**, migré depuis les données mono-tenant existantes (pas de repartir de zéro) : une `Organization` "Kmat Supply" et un unique `Bureau` "Kmat Supply — Siège", tous les utilisateurs/clients/transactions/caisses existants y sont rattachés.
+- **Un caissier/superviseur/admin de bureau est rattaché à un seul bureau** (`User.bureauId` défini). Un utilisateur "org-wide" (`bureauId = null`) gère les bureaux, les utilisateurs et la grille tarifaire de son organisation mais n'ouvre pas personnellement de caisse — une caisse appartient à un bureau précis. Pas de nouvelle valeur d'enum `Role` : la distinction se fait uniquement par `bureauId`.
+- **Scoping** : `Client`, `Transaction`, `Attachment`, `CashSession`, `CashMovement`, `MobileMoneyOperation` sont scopés par `Bureau` (jamais partagés entre bureaux, même du même propriétaire). `PricingRule` et `ReferenceRate` sont scopés par `Organization` (le propriétaire fixe une grille pour tous ses bureaux — pas d'override par bureau pour l'instant). `AuditLog` est scopé par `Organization`.
+- **Contraintes d'unicité corrigées** : `Client.[idType, idNumber]` et `Transaction.[channel, externalRef]` sont maintenant scopées par `bureauId` (deux bureaux différents peuvent réutiliser les mêmes numéros de pièce ou les mêmes références de canal). `User.username` reste unique **globalement** (pas par organisation) : une seule page de connexion, sans sélecteur d'organisation.
+- **Facturation** : modèle `Invoice` (trace manuelle par organisation, `DUE`/`PAID`, encaissement hors-ligne) et `PlatformAdmin` (toi, opérateur de la plateforme — table entièrement séparée du modèle tenant, session et login distincts sous `/platform/*`, pour qu'une session plateforme ne puisse jamais être confondue avec une session tenant).
+- **Migration technique** : comme pour les migrations précédentes de ce repo, le binaire `schema-engine` de Prisma ne peut pas atteindre la base Railway depuis cette machine — les migrations SQL sont appliquées directement via `node`+`pg`, puis enregistrées dans `_prisma_migrations` pour rester compatibles avec `prisma migrate deploy` en CI/déploiement.
+
+**Livré (M8)** : schéma, migration + backfill Kmat Supply, aide `requireBureauId()` dans `src/lib/auth.ts`, et tous les points d'écriture (`create()`) mis à jour pour rester compilables — sans changement de comportement visible (un seul bureau existe, donc tout fonctionne exactement comme avant). **Pas encore livré (M9)** : le filtrage systématique des lectures (`findMany`/`findFirst`) par bureau sur les écrans existants — sans impact tant qu'un seul bureau existe, mais nécessaire avant qu'un deuxième bureau soit créé, sous peine de fuite de données entre bureaux.

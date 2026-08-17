@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/db";
-import { requireUser, requireRole } from "@/lib/auth";
+import { requireUser, requireRole, requireBureauId } from "@/lib/auth";
 import { recordAuditLog } from "@/lib/audit";
 import type { IdType } from "@/generated/prisma/client";
 
@@ -31,6 +31,7 @@ export async function verifyTransactionAction(
 
   await recordAuditLog({
     userId: user.id,
+    organizationId: user.organizationId,
     action: "TRANSACTION_VERIFIED",
     entityType: "Transaction",
     entityId: transactionId,
@@ -46,6 +47,7 @@ export async function payTransactionAction(
 ): Promise<SimpleActionState> {
   const user = await requireUser();
   requireRole(user, ["CASHIER", "SUPERVISOR", "ADMIN"]);
+  const bureauId = requireBureauId(user);
 
   const transactionId = String(formData.get("transactionId") ?? "");
   const confirmedNetPayout = String(formData.get("confirmedNetPayout") ?? "");
@@ -75,7 +77,7 @@ export async function payTransactionAction(
     }
 
     const existingCollector = await prisma.client.findUnique({
-      where: { idType_idNumber: { idType: collectorIdType, idNumber: collectorIdNumber } },
+      where: { bureauId_idType_idNumber: { bureauId, idType: collectorIdType, idNumber: collectorIdNumber } },
     });
 
     collectedById = existingCollector
@@ -83,6 +85,7 @@ export async function payTransactionAction(
       : (
           await prisma.client.create({
             data: {
+              bureauId,
               fullName: collectorFullName,
               idType: collectorIdType,
               idNumber: collectorIdNumber,
@@ -95,7 +98,7 @@ export async function payTransactionAction(
 
   // Caisse commune : le paiement puise dans la caisse partagée actuellement
   // ouverte par l'admin, pas dans une caisse personnelle de l'agent qui paie.
-  const cashSession = await prisma.cashSession.findFirst({ where: { status: "OPEN" } });
+  const cashSession = await prisma.cashSession.findFirst({ where: { bureauId, status: "OPEN" } });
   if (!cashSession) {
     return { error: "Aucune caisse commune ouverte. Demandez à un administrateur de l'ouvrir." };
   }
@@ -114,6 +117,7 @@ export async function payTransactionAction(
     prisma.cashMovement.create({
       data: {
         cashSessionId: cashSession.id,
+        bureauId,
         direction: "OUT",
         currency: transaction.payoutCurrency,
         amount: transaction.netPayout,
@@ -126,6 +130,7 @@ export async function payTransactionAction(
 
   await recordAuditLog({
     userId: user.id,
+    organizationId: user.organizationId,
     action: "TRANSACTION_PAID",
     entityType: "Transaction",
     entityId: transactionId,

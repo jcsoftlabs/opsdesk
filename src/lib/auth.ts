@@ -14,6 +14,13 @@ export interface CurrentUser {
   username: string;
   role: Role;
   mustChangePassword: boolean;
+  organizationId: string;
+  // null = utilisateur "org-wide" (le propriétaire ou un admin qui gère
+  // plusieurs bureaux) : gère les bureaux/utilisateurs/grille tarifaire de
+  // son Organization mais n'ouvre pas personnellement de caisse, une caisse
+  // appartenant à un bureau précis. Défini = utilisateur rattaché à un seul
+  // bureau (confirmé 2026-08-16).
+  bureauId: string | null;
 }
 
 /** Résout l'utilisateur courant à partir du cookie de session. Ne redirige jamais. */
@@ -33,6 +40,8 @@ export async function getCurrentUser(): Promise<CurrentUser | null> {
     username: user.username,
     role: user.role,
     mustChangePassword: user.mustChangePassword,
+    organizationId: user.organizationId,
+    bureauId: user.bureauId,
   };
 }
 
@@ -75,4 +84,29 @@ export async function requireRoleOrRedirect(allowed: Role[]): Promise<CurrentUse
   const user = await requireUserOrRedirect();
   if (!allowed.includes(user.role)) redirect("/dashboard");
   return user;
+}
+
+export class NoBureauSelectedError extends Error {
+  constructor() {
+    super(
+      "Aucun bureau sélectionné. Un utilisateur multi-bureaux doit choisir un bureau actif avant cette action.",
+    );
+    this.name = "NoBureauSelectedError";
+  }
+}
+
+/**
+ * Résout le bureau dans lequel agit l'utilisateur courant : le sien s'il est
+ * rattaché à un seul bureau, sinon le bureau explicitement sélectionné (pour
+ * un utilisateur org-wide — bureauId = null) via `explicitBureauId` — même
+ * mécanique que le sélecteur `?userId=` déjà existant pour qu'un ADMIN
+ * consulte la caisse d'un autre utilisateur, généralisée en `?bureauId=`
+ * (voir IMPLEMENTATION.md §15). Le sélecteur d'écran (cookie `activeBureauId`
+ * + garde-fou "ce bureau appartient bien à mon organisation") arrive avec
+ * M10 ; cette aide ne fait que centraliser la règle de résolution.
+ */
+export function requireBureauId(user: CurrentUser, explicitBureauId?: string | null): string {
+  if (user.bureauId) return user.bureauId;
+  if (explicitBureauId) return explicitBureauId;
+  throw new NoBureauSelectedError();
 }

@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/db";
-import { requireUser, requireRole } from "@/lib/auth";
+import { requireUser, requireRole, requireBureauId } from "@/lib/auth";
 import { recordAuditLog } from "@/lib/audit";
 import {
   createUploadSignature,
@@ -37,12 +37,14 @@ export interface ClientSearchResult {
 }
 
 export async function searchClientsAction(query: string): Promise<ClientSearchResult[]> {
-  await requireUser();
+  const user = await requireUser();
+  const bureauId = requireBureauId(user);
   const trimmed = query.trim();
   if (trimmed.length < 2) return [];
 
   return prisma.client.findMany({
     where: {
+      bureauId,
       OR: [
         { fullName: { contains: trimmed, mode: "insensitive" } },
         { idNumber: { contains: trimmed, mode: "insensitive" } },
@@ -121,6 +123,7 @@ export async function createTransactionAction(
 ): Promise<CreateTransactionState> {
   const user = await requireUser();
   requireRole(user, [...CREATE_TRANSACTION_ROLES]);
+  const bureauId = requireBureauId(user);
 
   const channel = String(formData.get("channel") ?? "") as Channel;
   const senderName = String(formData.get("senderName") ?? "").trim();
@@ -157,7 +160,7 @@ export async function createTransactionAction(
     }
 
     const existing = await prisma.client.findUnique({
-      where: { idType_idNumber: { idType: clientIdType, idNumber: clientIdNumber } },
+      where: { bureauId_idType_idNumber: { bureauId, idType: clientIdType, idNumber: clientIdNumber } },
     });
 
     if (existing) {
@@ -165,6 +168,7 @@ export async function createTransactionAction(
     } else {
       const created = await prisma.client.create({
         data: {
+          bureauId,
           fullName: clientFullName,
           idType: clientIdType,
           idNumber: clientIdNumber,
@@ -178,7 +182,7 @@ export async function createTransactionAction(
 
   // Règle tarifaire active — recalcul autoritaire, jamais depuis le client (§7.3)
   const rule = await prisma.pricingRule.findFirst({
-    where: { channel, payoutCurrency, effectiveTo: null },
+    where: { organizationId: user.organizationId, channel, payoutCurrency, effectiveTo: null },
   });
   if (!rule) {
     return { error: "Aucune règle tarifaire active pour cette combinaison. Contactez un administrateur." };
@@ -225,6 +229,7 @@ export async function createTransactionAction(
     const transaction = await prisma.$transaction(async (tx) => {
       const created = await tx.transaction.create({
         data: {
+          bureauId,
           channel,
           externalRef,
           senderName,
@@ -239,6 +244,7 @@ export async function createTransactionAction(
           createdById: user.id,
           attachments: {
             create: verifiedAttachments.map((a) => ({
+              bureauId,
               kind: a.kind,
               publicId: a.publicId,
               secureUrl: a.secureUrl,
@@ -254,6 +260,7 @@ export async function createTransactionAction(
 
     await recordAuditLog({
       userId: user.id,
+      organizationId: user.organizationId,
       action: "TRANSACTION_CREATED",
       entityType: "Transaction",
       entityId: transaction.id,

@@ -37,11 +37,20 @@ export async function createUserAction(
 
   try {
     const created = await prisma.user.create({
-      data: { fullName, username, role, passwordHash, mustChangePassword: true },
+      data: {
+        fullName,
+        username,
+        role,
+        passwordHash,
+        mustChangePassword: true,
+        organizationId: admin.organizationId,
+        bureauId: admin.bureauId,
+      },
     });
 
     await recordAuditLog({
       userId: admin.id,
+      organizationId: admin.organizationId,
       action: "USER_CREATED",
       entityType: "User",
       entityId: created.id,
@@ -81,6 +90,7 @@ export async function deactivateUserAction(
 
   await recordAuditLog({
     userId: admin.id,
+    organizationId: admin.organizationId,
     action: "USER_DEACTIVATED",
     entityType: "User",
     entityId: userId,
@@ -109,6 +119,7 @@ export async function reactivateUserAction(
 
   await recordAuditLog({
     userId: admin.id,
+    organizationId: admin.organizationId,
     action: "USER_REACTIVATED",
     entityType: "User",
     entityId: userId,
@@ -148,6 +159,7 @@ export async function resetPasswordAction(
 
   await recordAuditLog({
     userId: admin.id,
+    organizationId: admin.organizationId,
     action: "PASSWORD_RESET",
     entityType: "User",
     entityId: userId,

@@ -1,5 +1,5 @@
-// Schéma Prisma — OpsDesk, phase 1 (transferts)
-// Référence : IMPLEMENTATION.md §4-6
+// Schéma Prisma — OpsDesk
+// Référence : IMPLEMENTATION.md §4-6, §15 (SaaS multi-bureaux)
 
 generator client {
   provider = "prisma-client"
@@ -84,6 +84,105 @@ enum MobileMoneyOperationType {
   TRANSFERT
 }
 
+enum InvoiceStatus {
+  DUE
+  PAID
+}
+
+// Le "propriétaire" — le client qui paie pour OpsDesk (SaaS multi-bureaux,
+// confirmé 2026-08-16). Kmat Supply est la première Organization du système,
+// migrée depuis les données mono-tenant existantes.
+model Organization {
+  id    String @id @default(cuid())
+  name  String
+  phone String?
+
+  // Tarif mensuel par caisse (bureau) active, facturation par caisse
+  // confirmée 2026-08-16. Suivi interne, encaissement manuel pour l'instant.
+  billingRatePerBureau Decimal @db.Decimal(18, 2)
+
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+
+  bureaux       Bureau[]
+  users         User[]
+  pricingRules  PricingRule[]
+  referenceRates ReferenceRate[]
+  auditLogs     AuditLog[]
+  invoices      Invoice[]
+
+  @@map("organizations")
+}
+
+// Un bureau physique = une caisse facturable. Un propriétaire peut avoir
+// plusieurs bureaux (confirmé 2026-08-16) ; chaque bureau a sa propre caisse
+// commune, ses propres clients et transactions.
+model Bureau {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id])
+
+  name   String
+  active Boolean @default(true)
+
+  createdAt DateTime @default(now())
+
+  users                 User[]
+  clients               Client[]
+  transactions          Transaction[]
+  attachments           Attachment[]
+  cashSessions          CashSession[]
+  cashMovements         CashMovement[]
+  mobileMoneyOperations MobileMoneyOperation[]
+
+  @@index([organizationId])
+  @@map("bureaux")
+}
+
+// Trace manuelle de facturation (paiement hors-ligne, virement ou cash) —
+// pas d'intégration de paiement automatisée pour l'instant (confirmé
+// 2026-08-16). Créée par un PlatformAdmin à chaque période de facturation.
+model Invoice {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id])
+
+  periodStart DateTime
+  periodEnd   DateTime
+
+  bureauCount   Int
+  ratePerBureau Decimal @db.Decimal(18, 2)
+  totalAmount   Decimal @db.Decimal(18, 2)
+
+  status InvoiceStatus @default(DUE)
+  paidAt DateTime?
+  note   String?
+
+  createdById String
+  createdBy   PlatformAdmin @relation(fields: [createdById], references: [id])
+  createdAt   DateTime      @default(now())
+
+  @@index([organizationId, status])
+  @@map("invoices")
+}
+
+// Opérateur de la plateforme SaaS (toi), entièrement hors du modèle tenant —
+// jamais rattaché à une Organization, session et login séparés (voir
+// src/lib/platformAuth.ts) pour qu'une session plateforme ne puisse jamais
+// être confondue avec une session tenant.
+model PlatformAdmin {
+  id           String @id @default(cuid())
+  fullName     String
+  email        String @unique
+  passwordHash String
+
+  createdAt DateTime @default(now())
+
+  invoices Invoice[]
+
+  @@map("platform_admins")
+}
+
 model User {
   id           String   @id @default(cuid())
   fullName     String
@@ -96,6 +195,18 @@ model User {
   mustChangePassword Boolean   @default(true)
   failedLoginCount   Int       @default(0)
   lockedUntil        DateTime?
+
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id])
+
+  // Nullable : un utilisateur "org-wide" (bureauId = null) gère les bureaux,
+  // les utilisateurs et la grille tarifaire de son Organization mais n'ouvre
+  // pas personnellement de caisse. Un utilisateur rattaché à un bureau
+  // (bureauId défini) opère uniquement dans ce bureau — un caissier/
+  // superviseur/admin de bureau appartient à un seul bureau (confirmé
+  // 2026-08-16).
+  bureauId String?
+  bureau   Bureau? @relation(fields: [bureauId], references: [id])
 
   createdClients        Client[]        @relation("ClientCreatedBy")
   createdTransactions   Transaction[]   @relation("TransactionCreatedBy")
@@ -110,6 +221,8 @@ model User {
   createdReferenceRates ReferenceRate[]
   mobileMoneyOperations MobileMoneyOperation[]
 
+  @@index([organizationId])
+  @@index([bureauId])
   @@map("users")
 }
 
@@ -121,34 +234,44 @@ model Client {
   idNumber  String
   createdAt DateTime @default(now())
 
+  bureauId String
+  bureau   Bureau @relation(fields: [bureauId], references: [id])
+
   createdById String
   createdBy   User   @relation("ClientCreatedBy", fields: [createdById], references: [id])
 
   transactions          Transaction[] @relation("TransactionClient")
   collectedTransactions Transaction[] @relation("TransactionCollectedBy")
 
-  @@unique([idType, idNumber])
+  @@unique([bureauId, idType, idNumber])
   @@map("clients")
 }
 
 // Taux de change de référence du marché, saisi par l'admin (§7.8), utilisé
 // pour calculer la marge de change — indépendant du taux appliqué au client
 // (PricingRule.exchangeRate). Même logique de versionnement (jamais d'update).
+// Scopé par Organization : un propriétaire fixe un taux pour tous ses bureaux.
 model ReferenceRate {
   id            String    @id @default(cuid())
   rate          Decimal   @db.Decimal(10, 4)
   effectiveFrom DateTime  @default(now())
   effectiveTo   DateTime?
 
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id])
+
   createdById String
   createdBy   User   @relation(fields: [createdById], references: [id])
 
   createdAt DateTime @default(now())
 
-  @@index([effectiveTo])
+  @@index([organizationId, effectiveTo])
   @@map("reference_rates")
 }
 
+// Scopée par Organization : la grille tarifaire est définie une fois par le
+// propriétaire pour tous ses bureaux (pas d'override par bureau pour
+// l'instant — à ajouter plus tard si un client le demande).
 model PricingRule {
   id                  String    @id @default(cuid())
   channel             Channel
@@ -161,12 +284,15 @@ model PricingRule {
   effectiveFrom       DateTime  @default(now())
   effectiveTo         DateTime?
 
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id])
+
   createdById String
   createdBy   User   @relation(fields: [createdById], references: [id])
 
   createdAt DateTime @default(now())
 
-  @@index([channel, payoutCurrency, effectiveTo])
+  @@index([organizationId, channel, payoutCurrency, effectiveTo])
   @@map("pricing_rules")
 }
 
@@ -176,6 +302,9 @@ model Transaction {
   channel     Channel
   externalRef String
   senderName  String
+
+  bureauId String
+  bureau   Bureau @relation(fields: [bureauId], references: [id])
 
   clientId String
   client   Client @relation("TransactionClient", fields: [clientId], references: [id])
@@ -223,8 +352,8 @@ model Transaction {
   attachments   Attachment[]
   cashMovements CashMovement[]
 
-  @@unique([channel, externalRef])
-  @@index([status, createdAt])
+  @@unique([bureauId, channel, externalRef])
+  @@index([bureauId, status, createdAt])
   @@index([clientId])
   @@index([collectedById])
   @@map("transactions")
@@ -235,6 +364,9 @@ model Attachment {
   transactionId String
   transaction   Transaction    @relation(fields: [transactionId], references: [id])
   kind          AttachmentKind
+
+  bureauId String
+  bureau   Bureau @relation(fields: [bureauId], references: [id])
 
   publicId  String
   secureUrl String
@@ -250,12 +382,17 @@ model Attachment {
   @@map("attachments")
 }
 
-// Caisse commune (pas une caisse par caissier) : les agents qui traitent les
-// transactions ne gèrent pas leur propre caisse — ils puisent dans une caisse
-// partagée que seul l'ADMIN ouvre/ferme, alimentée en cours de journée par des
-// apports de liquidités (livraison de cash). Voir IMPLEMENTATION.md §7.6.
+// Caisse commune d'un bureau (pas une caisse par caissier) : les agents qui
+// traitent les transactions ne gèrent pas leur propre caisse — ils puisent
+// dans la caisse partagée de leur bureau, que seul un ADMIN de ce bureau
+// ouvre/ferme, alimentée en cours de journée par des apports de liquidités.
+// Un bureau n'a jamais plus d'une caisse OPEN à la fois — voir IMPLEMENTATION.md §7.6.
 model CashSession {
-  id         String @id @default(cuid())
+  id String @id @default(cuid())
+
+  bureauId String
+  bureau   Bureau @relation(fields: [bureauId], references: [id])
+
   openedById String
   openedBy   User   @relation(fields: [openedById], references: [id])
 
@@ -279,7 +416,7 @@ model CashSession {
   cashMovements         CashMovement[]
   mobileMoneyOperations MobileMoneyOperation[]
 
-  @@index([status])
+  @@index([bureauId, status])
   @@map("cash_sessions")
 }
 
@@ -287,6 +424,9 @@ model CashMovement {
   id            String      @id @default(cuid())
   cashSessionId String
   cashSession   CashSession @relation(fields: [cashSessionId], references: [id])
+
+  bureauId String
+  bureau   Bureau @relation(fields: [bureauId], references: [id])
 
   direction CashMovementDirection
   currency  Currency
@@ -306,6 +446,7 @@ model CashMovement {
   createdAt   DateTime @default(now())
 
   @@index([cashSessionId])
+  @@index([bureauId])
   @@map("cash_movements")
 }
 
@@ -326,6 +467,9 @@ model MobileMoneyOperation {
   provider      MobileMoneyProvider
   operationType MobileMoneyOperationType
 
+  bureauId String
+  bureau   Bureau @relation(fields: [bureauId], references: [id])
+
   // Numéro du client venu au guichet (retrait, dépôt ou transfert).
   clientNumber String
 
@@ -344,7 +488,7 @@ model MobileMoneyOperation {
 
   cashMovements CashMovement[]
 
-  @@index([provider, createdAt])
+  @@index([bureauId, provider, createdAt])
   @@index([clientNumber])
   @@map("mobile_money_operations")
 }
@@ -357,6 +501,9 @@ model AuditLog {
   entityType String
   entityId   String
 
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id])
+
   beforeJson Json?
   afterJson  Json?
 
@@ -364,6 +511,6 @@ model AuditLog {
   createdAt DateTime @default(now())
 
   @@index([entityType, entityId])
-  @@index([userId, createdAt])
+  @@index([organizationId, createdAt])
   @@map("audit_logs")
 }

@@ -33,7 +33,7 @@ export async function updatePricingRuleAction(
   }
 
   const current = await prisma.pricingRule.findFirst({
-    where: { channel, payoutCurrency, effectiveTo: null },
+    where: { organizationId: user.organizationId, channel, payoutCurrency, effectiveTo: null },
   });
   if (!current) return { error: "Règle active introuvable" };
 
@@ -78,6 +78,7 @@ export async function updatePricingRuleAction(
     await tx.pricingRule.update({ where: { id: current.id }, data: { effectiveTo: new Date() } });
     return tx.pricingRule.create({
       data: {
+        organizationId: user.organizationId,
         channel,
         payoutCurrency,
         allowed,
@@ -92,6 +93,7 @@ export async function updatePricingRuleAction(
 
   await recordAuditLog({
     userId: user.id,
+    organizationId: user.organizationId,
     action: "PRICING_RULE_CHANGED",
     entityType: "PricingRule",
     entityId: newRule.id,
@@ -118,17 +120,22 @@ export async function updateReferenceRateAction(
   const rate = Number(rateRaw);
   if (!Number.isFinite(rate) || rate <= 0) return { error: "Taux invalide" };
 
-  const current = await prisma.referenceRate.findFirst({ where: { effectiveTo: null } });
+  const current = await prisma.referenceRate.findFirst({
+    where: { organizationId: user.organizationId, effectiveTo: null },
+  });
 
   await prisma.$transaction(async (tx) => {
     if (current) {
       await tx.referenceRate.update({ where: { id: current.id }, data: { effectiveTo: new Date() } });
     }
-    await tx.referenceRate.create({ data: { rate: rateRaw, createdById: user.id } });
+    await tx.referenceRate.create({
+      data: { organizationId: user.organizationId, rate: rateRaw, createdById: user.id },
+    });
   });
 
   await recordAuditLog({
     userId: user.id,
+    organizationId: user.organizationId,
     action: "REFERENCE_RATE_CHANGED",
     entityType: "ReferenceRate",
     entityId: "current",

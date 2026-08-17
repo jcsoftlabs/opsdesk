@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/db";
-import { requireUser } from "@/lib/auth";
+import { requireUser, requireBureauId } from "@/lib/auth";
 import { recordAuditLog } from "@/lib/audit";
 import type { CashMovementReason, MobileMoneyOperationType, MobileMoneyProvider } from "@/generated/prisma/client";
 
@@ -40,6 +40,7 @@ export async function createMobileMoneyOperationAction(
   formData: FormData,
 ): Promise<CreateMobileMoneyOperationState> {
   const user = await requireUser();
+  const bureauId = requireBureauId(user);
 
   const provider = formData.get("provider") as string;
   const operationType = formData.get("operationType") as string;
@@ -71,7 +72,7 @@ export async function createMobileMoneyOperationAction(
   // Caisse commune : comme pour le paiement d'un transfert, on puise dans la
   // session actuellement ouverte par l'admin (§7.6), pas dans une caisse
   // personnelle de l'agent qui saisit l'opération.
-  const cashSession = await prisma.cashSession.findFirst({ where: { status: "OPEN" } });
+  const cashSession = await prisma.cashSession.findFirst({ where: { bureauId, status: "OPEN" } });
   if (!cashSession) {
     return { error: "Aucune caisse commune ouverte. Demandez à un administrateur de l'ouvrir." };
   }
@@ -81,6 +82,7 @@ export async function createMobileMoneyOperationAction(
   const operation = await prisma.$transaction(async (tx) => {
     const created = await tx.mobileMoneyOperation.create({
       data: {
+        bureauId,
         provider: provider as MobileMoneyProvider,
         operationType: type,
         clientNumber,
@@ -94,6 +96,7 @@ export async function createMobileMoneyOperationAction(
     await tx.cashMovement.create({
       data: {
         cashSessionId: cashSession.id,
+        bureauId,
         direction: CASH_DIRECTION_BY_OPERATION_TYPE[type],
         currency: "HTG",
         amount: amountRaw,
@@ -108,6 +111,7 @@ export async function createMobileMoneyOperationAction(
 
   await recordAuditLog({
     userId: user.id,
+    organizationId: user.organizationId,
     action: "CREATE",
     entityType: "MobileMoneyOperation",
     entityId: operation.id,
