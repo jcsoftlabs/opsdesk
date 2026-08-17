@@ -11,7 +11,7 @@ const OPERATION_LABEL: Record<string, string> = {
   TRANSFERT: "Transfert (vers un autre client du réseau)",
 };
 
-export function MobileMoneyForm() {
+export function MobileMoneyForm({ cashSessionOpen }: { cashSessionOpen: boolean }) {
   const [state, formAction, pending] = useActionState(createMobileMoneyOperationAction, initialState);
   const [operationType, setOperationType] = useState("RETRAIT");
   const [formKey, setFormKey] = useState(0);
@@ -114,7 +114,7 @@ export function MobileMoneyForm() {
         <div className="sm:col-span-2">
           <button
             type="submit"
-            disabled={pending}
+            disabled={pending || !cashSessionOpen}
             className="rounded bg-neutral-900 px-4 py-1.5 text-sm font-medium text-white disabled:opacity-50"
           >
             {pending ? "Enregistrement…" : "Enregistrer l'opération"}

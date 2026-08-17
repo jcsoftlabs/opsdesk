@@ -67,6 +67,9 @@ enum CashMovementReason {
   ADJUSTMENT
   OPENING
   CASH_TOPUP
+  MOBILE_MONEY_DEPOSIT
+  MOBILE_MONEY_TRANSFER
+  MOBILE_MONEY_WITHDRAWAL
   OTHER
 }
 
@@ -272,8 +275,9 @@ model CashSession {
 
   status CashSessionStatus @default(OPEN)
 
-  transactions  Transaction[]
-  cashMovements CashMovement[]
+  transactions          Transaction[]
+  cashMovements         CashMovement[]
+  mobileMoneyOperations MobileMoneyOperation[]
 
   @@index([status])
   @@map("cash_sessions")
@@ -292,6 +296,9 @@ model CashMovement {
   transactionId String?
   transaction   Transaction? @relation(fields: [transactionId], references: [id])
 
+  mobileMoneyOperationId String?
+  mobileMoneyOperation   MobileMoneyOperation? @relation(fields: [mobileMoneyOperationId], references: [id])
+
   note String?
 
   createdById String
@@ -305,9 +312,15 @@ model CashMovement {
 // Registre BRH des opérations MonCash/NatCash (cahier obligatoire des agents
 // de monnaie mobile), distinct des transferts diaspora : pas de calcul de
 // frais (les frais sont fixés par le réseau MonCash/NatCash lui-même, non
-// modifiables par l'agent), pas de mouvement de caisse propre à OpsDesk, HTG
-// uniquement. Append-only comme audit_logs : un cahier ne se corrige pas
-// après coup. Confirmé par le client (2026-08-16).
+// modifiables par l'agent — le gain de l'agent résulte de son contrat avec
+// Digicel/Natcom, hors du champ d'OpsDesk). HTG uniquement. Append-only
+// comme audit_logs : un cahier ne se corrige pas après coup.
+//
+// Affecte bien la caisse commune (confirmé 2026-08-16, révision de la
+// décision initiale du même jour) : un dépôt ou un transfert fait rentrer du
+// cash physique (le client remet l'argent au guichet), un retrait en fait
+// sortir. Chaque opération crée donc un CashMovement lié, dans la session de
+// caisse ouverte au moment de la saisie — voir §7.9.
 model MobileMoneyOperation {
   id            String                    @id @default(cuid())
   provider      MobileMoneyProvider
@@ -322,9 +335,14 @@ model MobileMoneyOperation {
 
   amount Decimal @db.Decimal(18, 2)
 
+  cashSessionId String
+  cashSession   CashSession @relation(fields: [cashSessionId], references: [id])
+
   createdById String
   createdBy   User     @relation(fields: [createdById], references: [id])
   createdAt   DateTime @default(now())
+
+  cashMovements CashMovement[]
 
   @@index([provider, createdAt])
   @@index([clientNumber])

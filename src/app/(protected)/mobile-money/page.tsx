@@ -34,11 +34,14 @@ export default async function MobileMoneyPage({
     ...(operationType ? { operationType: operationType as "RETRAIT" | "DEPOT" | "TRANSFERT" } : {}),
   };
 
-  const operations = await prisma.mobileMoneyOperation.findMany({
-    where,
-    include: { createdBy: { select: { fullName: true } } },
-    orderBy: { createdAt: "desc" },
-  });
+  const [openCashSession, operations] = await Promise.all([
+    prisma.cashSession.findFirst({ where: { status: "OPEN" } }),
+    prisma.mobileMoneyOperation.findMany({
+      where,
+      include: { createdBy: { select: { fullName: true } } },
+      orderBy: { createdAt: "desc" },
+    }),
+  ]);
 
   const total = operations.reduce((acc, o) => acc + Number(o.amount), 0);
 
@@ -71,7 +74,14 @@ export default async function MobileMoneyPage({
         </p>
       </div>
 
-      <MobileMoneyForm />
+      {!openCashSession ? (
+        <p className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+          Aucune caisse commune ouverte. Chaque opération affecte la caisse (dépôt/transfert = entrée de
+          cash, retrait = sortie) — demandez à un administrateur de l&apos;ouvrir avant de saisir.
+        </p>
+      ) : null}
+
+      <MobileMoneyForm cashSessionOpen={Boolean(openCashSession)} />
 
       <section className="rounded-lg border border-neutral-200 bg-white p-5">
         <div className="flex flex-wrap items-center justify-between gap-3">

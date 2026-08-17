@@ -19,6 +19,9 @@ const REASON_LABEL: Record<string, string> = {
   ADJUSTMENT: "Ajustement",
   OPENING: "Ouverture",
   CASH_TOPUP: "Apport de liquidités",
+  MOBILE_MONEY_DEPOSIT: "MonCash/NatCash — Dépôt",
+  MOBILE_MONEY_TRANSFER: "MonCash/NatCash — Transfert",
+  MOBILE_MONEY_WITHDRAWAL: "MonCash/NatCash — Retrait",
   OTHER: "Autre",
 };
 

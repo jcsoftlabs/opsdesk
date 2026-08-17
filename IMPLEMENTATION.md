@@ -207,6 +207,7 @@ MobileMoneyOperation          // cahier BRH agent MonCash/NatCash — distinct d
   clientNumber                // numéro du client au guichet
   destinataireNumber?         // uniquement pour TRANSFERT
   amount: Decimal             // HTG uniquement
+  cashSessionId                // session de caisse commune ouverte au moment de la saisie (affecte la caisse)
   createdById, createdAt      // append-only, jamais de UPDATE ni DELETE
 ```
 
@@ -314,17 +315,19 @@ Bouton **Enregistrer** → statut `RECEIVED`.
 
 ### 7.9 Registre MonCash / NatCash
 
-**Confirmé par le client (2026-08-16).** L'entreprise agit aussi comme agent MonCash (Digicel) et NatCash (Natcom) : la BRH impose aux agents de tenir un cahier listant toutes les opérations effectuées au guichet. C'est un processus **distinct** du transfert diaspora (`Transaction`) : pas d'identité client vérifiée par pièce, pas de calcul de frais côté OpsDesk (les frais MonCash/NatCash sont fixés par le réseau, non modifiables par l'agent, connus de tous), pas de mouvement de caisse OpsDesk (l'agent gère son solde MonCash/NatCash séparément). Modélisé par un modèle Prisma dédié, `MobileMoneyOperation`, pas une extension du `Channel` existant.
+**Confirmé par le client (2026-08-16).** L'entreprise agit aussi comme agent MonCash (Digicel) et NatCash (Natcom) : la BRH impose aux agents de tenir un cahier listant toutes les opérations effectuées au guichet. C'est un processus **distinct** du transfert diaspora (`Transaction`) : pas d'identité client vérifiée par pièce, pas de calcul de frais côté OpsDesk (les frais MonCash/NatCash sont fixés par le réseau, non modifiables par l'agent, connus de tous — le gain de l'agent résulte de son contrat avec Digicel/Natcom, hors du champ d'OpsDesk). Modélisé par un modèle Prisma dédié, `MobileMoneyOperation`, pas une extension du `Channel` existant.
 
 Trois types d'opération, avec les champs exigés par la BRH :
 - **Retrait** (client retire de son compte) : numéro du client + montant.
 - **Dépôt** (client dépose sur son compte) : numéro du client + montant.
 - **Transfert** (client envoie à un autre client du réseau, au guichet) : numéro du client + numéro du destinataire + montant.
 
+**Impact caisse (révisé le même jour, 2026-08-16)** : contrairement à la décision initiale, ces opérations affectent bien la caisse commune — le client remet du cash physique au guichet pour un dépôt ou un transfert (entrée de caisse), et l'agent remet du cash pour un retrait (sortie de caisse). Chaque opération crée donc un `CashMovement` lié (`reason` : `MOBILE_MONEY_DEPOSIT` | `MOBILE_MONEY_TRANSFER` | `MOBILE_MONEY_WITHDRAWAL`), dans la session de caisse commune ouverte au moment de la saisie — même mécanisme que le paiement d'un transfert (§7.4) : bloqué si aucune caisse n'est ouverte, avec message clair.
+
 Règles retenues :
 - Montants en **gourdes (HTG) uniquement**.
-- Registre **append-only** : comme `audit_logs`, une opération enregistrée ne peut plus être modifiée ni supprimée (contrainte imposée en base par trigger, pas seulement côté application) — cohérent avec la nature d'un cahier physique.
-- Écran dédié `/mobile-money`, accessible à tous les rôles authentifiés (CASHIER compris, ce sont eux qui tiennent le cahier au quotidien) : formulaire de saisie + liste du jour avec filtres (réseau, type d'opération, navigation jour par jour) + export Excel (même mécanisme CSV que les autres rapports, cf. §7.8).
+- Registre **append-only** : comme `audit_logs`, une opération enregistrée ne peut plus être modifiée ni supprimée (contrainte imposée en base par trigger, pas seulement côté application) — cohérent avec la nature d'un cahier physique. La caisse ouverte est donc figée sur l'opération dès sa saisie, jamais réassignée après coup.
+- Écran dédié `/mobile-money`, accessible à tous les rôles authentifiés (CASHIER compris, ce sont eux qui tiennent le cahier au quotidien) : formulaire de saisie + liste du jour avec filtres (réseau, type d'opération, navigation jour par jour) + export Excel (même mécanisme CSV que les autres rapports, cf. §7.8). Bandeau d'avertissement si aucune caisse commune n'est ouverte.
 
 ---
 
