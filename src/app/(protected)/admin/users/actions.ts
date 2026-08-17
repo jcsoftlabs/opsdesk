@@ -32,6 +32,23 @@ export async function createUserAction(
     return { error: "Rôle invalide" };
   }
 
+  // Le sélecteur de bureau n'apparaît dans le formulaire que si l'organisation
+  // a plusieurs bureaux (§15/M10). Sinon on rattache le nouvel utilisateur au
+  // même bureau que l'admin qui le crée (comportement d'avant M10, inchangé).
+  let bureauId: string | null = admin.bureauId;
+  if (formData.has("bureauId")) {
+    const selected = String(formData.get("bureauId") ?? "").trim();
+    if (!selected) {
+      bureauId = null;
+    } else {
+      const bureau = await prisma.bureau.findUnique({ where: { id: selected } });
+      if (!bureau || bureau.organizationId !== admin.organizationId) {
+        return { error: "Bureau invalide" };
+      }
+      bureauId = bureau.id;
+    }
+  }
+
   const temporaryPassword = generateTemporaryPassword();
   const passwordHash = await argon2.hash(temporaryPassword, { type: argon2.argon2id });
 
@@ -44,7 +61,7 @@ export async function createUserAction(
         passwordHash,
         mustChangePassword: true,
         organizationId: admin.organizationId,
-        bureauId: admin.bureauId,
+        bureauId,
       },
     });
 

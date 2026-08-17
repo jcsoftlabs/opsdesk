@@ -27,7 +27,7 @@ const REASON_LABEL: Record<string, string> = {
 
 export default async function CashSessionPage() {
   const user = await requireUserOrRedirect();
-  const bureauId = requireBureauId(user);
+  const bureauId = await requireBureauId(user);
   const isAdmin = user.role === "ADMIN";
 
   const openSession = await prisma.cashSession.findFirst({

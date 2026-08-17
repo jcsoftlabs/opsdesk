@@ -16,7 +16,7 @@ export async function verifyTransactionAction(
 ): Promise<SimpleActionState> {
   const user = await requireUser();
   requireRole(user, ["CASHIER", "SUPERVISOR", "ADMIN"]);
-  const bureauId = requireBureauId(user);
+  const bureauId = await requireBureauId(user);
 
   const transactionId = String(formData.get("transactionId") ?? "");
   const transaction = await prisma.transaction.findUnique({ where: { id: transactionId } });
@@ -48,7 +48,7 @@ export async function payTransactionAction(
 ): Promise<SimpleActionState> {
   const user = await requireUser();
   requireRole(user, ["CASHIER", "SUPERVISOR", "ADMIN"]);
-  const bureauId = requireBureauId(user);
+  const bureauId = await requireBureauId(user);
 
   const transactionId = String(formData.get("transactionId") ?? "");
   const confirmedNetPayout = String(formData.get("confirmedNetPayout") ?? "");

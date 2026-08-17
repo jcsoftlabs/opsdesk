@@ -374,8 +374,8 @@ Règles retenues :
 | **M7** | Import de l'historique Excel, sauvegardes, déploiement Docker, formation | Restauration complète testée sur une machine vierge |
 | **M8** ✅ | Socle SaaS multi-bureaux : schéma Organization/Bureau/PlatformAdmin/Invoice, migration des données Kmat Supply, aides d'authentification (`requireBureauId`) | `tsc`/`build`/tests verts, aucune régression écran malgré le changement de schéma — voir §15 |
 | **M9** ✅ | Sweep de scoping : chaque requête Prisma des écrans existants filtrée par bureau/organisation | Deux bureaux du même propriétaire ne voient jamais les données l'un de l'autre |
-| **M10** | Écrans de gestion Organization/Bureau (créer un bureau, inviter des utilisateurs rattachés à un bureau), sélecteur de bureau dans la sidebar, infos entreprise dynamiques sur le reçu | Un propriétaire peut créer un deuxième bureau et y rattacher un caissier sans intervention technique |
-| **M11** | Console plateforme (`/platform/*`) : créer des organisations, tableau de bord facturation par caisse active, marquer une facture payée, suspension d'accès si impayé | Le nombre de caisses facturées correspond au nombre de bureaux actifs de l'organisation |
+| **M10** ✅ | Écrans de gestion Organization/Bureau (créer un bureau, inviter des utilisateurs rattachés à un bureau), sélecteur de bureau dans la sidebar, infos entreprise dynamiques sur le reçu | Un propriétaire peut créer un deuxième bureau et y rattacher un caissier sans intervention technique |
+| **M11** ✅ | Console plateforme (`/platform/*`) : créer des organisations, tableau de bord facturation par caisse active, marquer une facture payée, suspension d'accès si impayé | Le nombre de caisses facturées correspond au nombre de bureaux actifs de l'organisation |
 
 Les phases 2 (services légaux) et 3 (produits et stock) ne sont **pas** dans ce périmètre. Conçois toutefois `CashSession` et `CashMovement` pour accueillir plus tard des mouvements d'autres origines — c'est déjà prévu par le champ `reason`.
 
@@ -409,7 +409,7 @@ Cette activité relève de la réglementation des transferts de fonds en Haïti.
 
 ---
 
-## 15. SaaS multi-bureaux (M8-M9)
+## 15. SaaS multi-bureaux (M8-M11)
 
 **Confirmé par le client (2026-08-16).** OpsDesk devient vendable à d'autres maisons de transfert. Un propriétaire (`Organization`) peut posséder plusieurs bureaux (`Bureau`), chacun avec sa propre caisse commune. Facturation **par caisse active** (donc par bureau), suivi interne, encaissement manuel — pas d'intégration de paiement automatisée pour l'instant.
 
@@ -425,4 +425,18 @@ Décisions retenues :
 
 **Livré (M9)** : filtrage systématique de toutes les lectures (`findMany`/`findFirst`) par bureau ou organisation sur les 15 écrans existants (tableau de bord, rapports journalier/hebdomadaire/mensuel, caisse, registre MonCash/NatCash, transactions, administration). Au passage, plusieurs points de lecture par identifiant (`findUnique({ where: { id } })` sans vérifier le bureau/l'organisation du demandeur) ont été corrigés — sans le sweep ils auraient permis à un utilisateur d'un bureau d'agir sur une transaction, un utilisateur ou une session de caisse d'un **autre** bureau/organisation en devinant ou en réutilisant un identifiant : vérification/paiement de transaction, clôture de caisse, gestion des comptes utilisateurs (désactiver/réactiver/réinitialiser un mot de passe), consultation du détail ou du reçu d'une transaction. Comme un seul bureau existe encore aujourd'hui, cela ne changeait rien à l'usage réel — mais c'était une vraie faille de cloisonnement, maintenant fermée avant qu'un deuxième bureau existe.
 
-**Pas encore livré (M10)** : le sélecteur de bureau actif pour les utilisateurs "org-wide" (`bureauId = null`) — `requireBureauId()` accepte déjà un `bureauId` explicite (via `?bureauId=`, même mécanique que le sélecteur `?userId=` existant pour la caisse), mais aucun écran ne l'expose encore ; un utilisateur org-wide obtiendrait aujourd'hui une erreur en l'absence de sélection. Aucun utilisateur réel de ce type n'existe pour l'instant (les deux comptes Kmat Supply sont rattachés à leur bureau), donc sans impact immédiat.
+**Livré (M10)** :
+- `requireBureauId()` devenue async, avec un troisième niveau de résolution : bureau propre de l'utilisateur (prioritaire) → `explicitBureauId` (ex. `?bureauId=` du tableau de bord) → cookie `opsdesk_active_bureau` posé par le sélecteur de la sidebar. Un utilisateur org-wide (`bureauId = null`) sans aucun des deux se voit refuser l'accès (`NoBureauSelectedError`) plutôt que de voir des données au hasard.
+- Sélecteur de bureau dans la sidebar (`src/components/Sidebar.tsx` + `src/app/(protected)/actions.ts`), visible uniquement pour un utilisateur org-wide quand l'organisation a des bureaux actifs.
+- `/admin/bureaux` : ADMIN crée/désactive des bureaux de son organisation.
+- Création d'utilisateur (`/admin/users`) : sélecteur de bureau si l'organisation en a plusieurs (sinon comportement inchangé, hérite du bureau de l'admin créateur) ; option explicite "Tous les bureaux (org-wide)".
+- Reçu et son WhatsApp de secours : nom/téléphone dynamiques depuis `Organization` (`src/components/ReceiptTicket.tsx`, `src/app/(protected)/transactions/[id]/receipt/page.tsx`) — `src/lib/company.ts` (constantes codées en dur "Kmat Supply") supprimé, plus aucune référence.
+
+**Livré (M11)** :
+- Console `/platform/*`, auth entièrement séparée (`src/lib/platformAuth.ts`, cookie `opsdesk_platform_session`, table `PlatformAdmin` — jamais confondue avec un `User` tenant). Route `/platform/login` volontairement **hors** du layout protégé (route group `(protected)`) pour éviter une boucle de redirection — piège rencontré et corrigé pendant l'implémentation.
+- Créer une organisation (+ premier bureau + premier compte ADMIN, mot de passe temporaire affiché une seule fois) : `/platform/organizations/new`.
+- Par organisation : modifier le tarif par bureau, générer une facture manuelle (nombre de bureaux actifs × tarif, sur une période choisie), marquer une facture payée, **suspendre l'accès** (`Organization.active = false`).
+- Suspension appliquée dans `getCurrentUser()` (`src/lib/auth.ts`) : une organisation suspendue bloque la connexion de tous ses utilisateurs, immédiatement, sans purge de session à faire — vérifié en direct (connexion réussie puis rebond vers `/login` dès la page suivante). Limite connue : le message reste générique ("nom d'utilisateur ou mot de passe incorrect") plutôt qu'une page dédiée expliquant la suspension — à améliorer si ça devient un vrai point de friction commercial.
+- Bug de date corrigé pendant la vérification : les dates de période de facture saisies au format `YYYY-MM-DD` glissaient d'un jour à l'affichage (`new Date("2026-08-01")` interprété en UTC minuit puis affiché dans le fuseau local) — corrigé en réutilisant `parseDateParam` de `src/lib/businessWeek.ts` (même classe de bug déjà résolue ailleurs dans ce repo pour les rapports).
+
+Compte plateforme initial créé directement en base (pas d'écran d'auto-inscription, volontairement — un seul opérateur pour l'instant).

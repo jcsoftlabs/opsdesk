@@ -23,7 +23,7 @@ export default async function MobileMoneyPage({
   searchParams: Promise<{ date?: string; provider?: string; operationType?: string }>;
 }) {
   const user = await requireUserOrRedirect();
-  const bureauId = requireBureauId(user);
+  const bureauId = await requireBureauId(user);
   const { date: dateParam, provider, operationType } = await searchParams;
 
   const day = parseDateParam(dateParam) ?? startOfDay(new Date());

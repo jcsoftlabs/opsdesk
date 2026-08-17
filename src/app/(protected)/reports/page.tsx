@@ -28,7 +28,7 @@ export default async function DailyReportPage({
   searchParams: Promise<{ date?: string }>;
 }) {
   const user = await requireRoleOrRedirect(["SUPERVISOR", "ADMIN"]);
-  const bureauId = requireBureauId(user);
+  const bureauId = await requireBureauId(user);
   const { date: dateParam } = await searchParams;
 
   const day = parseDateParam(dateParam);

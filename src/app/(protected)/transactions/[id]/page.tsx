@@ -22,7 +22,7 @@ const AMOUNT_FORMATTER = new Intl.NumberFormat("fr-FR", { minimumFractionDigits:
 
 export default async function TransactionDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const user = await requireUserOrRedirect();
-  const bureauId = requireBureauId(user);
+  const bureauId = await requireBureauId(user);
   const { id } = await params;
 
   const transaction = await prisma.transaction.findUnique({

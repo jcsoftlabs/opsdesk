@@ -12,17 +12,32 @@ const ROLE_LABEL: Record<string, string> = {
 export default async function AdminUsersPage() {
   const admin = await requireRoleOrRedirect(["ADMIN"]);
 
-  const users = await prisma.user.findMany({
-    where: { organizationId: admin.organizationId },
-    orderBy: { createdAt: "asc" },
-    select: { id: true, fullName: true, username: true, role: true, active: true, createdAt: true },
-  });
+  const [users, bureaux] = await Promise.all([
+    prisma.user.findMany({
+      where: { organizationId: admin.organizationId },
+      orderBy: { createdAt: "asc" },
+      select: {
+        id: true,
+        fullName: true,
+        username: true,
+        role: true,
+        active: true,
+        createdAt: true,
+        bureau: { select: { name: true } },
+      },
+    }),
+    prisma.bureau.findMany({
+      where: { organizationId: admin.organizationId, active: true },
+      select: { id: true, name: true },
+      orderBy: { name: "asc" },
+    }),
+  ]);
 
   return (
     <main className="mx-auto max-w-4xl space-y-6 p-8">
       <h1 className="text-lg font-semibold text-neutral-900">Utilisateurs</h1>
 
-      <CreateUserForm />
+      <CreateUserForm bureaux={bureaux} />
 
       <div className="overflow-hidden rounded-lg border border-neutral-200 bg-white">
         <table className="w-full text-left text-sm">
@@ -31,6 +46,7 @@ export default async function AdminUsersPage() {
               <th className="px-4 py-2">Nom</th>
               <th className="px-4 py-2">Identifiant</th>
               <th className="px-4 py-2">Rôle</th>
+              <th className="px-4 py-2">Bureau</th>
               <th className="px-4 py-2">Statut</th>
               <th className="px-4 py-2" />
             </tr>
@@ -41,6 +57,7 @@ export default async function AdminUsersPage() {
                 <td className="px-4 py-2 text-neutral-900">{user.fullName}</td>
                 <td className="px-4 py-2 text-neutral-700">{user.username}</td>
                 <td className="px-4 py-2 text-neutral-700">{ROLE_LABEL[user.role]}</td>
+                <td className="px-4 py-2 text-neutral-700">{user.bureau?.name ?? "Tous les bureaux"}</td>
                 <td className="px-4 py-2">
                   <span
                     className={

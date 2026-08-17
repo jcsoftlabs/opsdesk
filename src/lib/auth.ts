@@ -30,9 +30,13 @@ export async function getCurrentUser(): Promise<CurrentUser | null> {
   const session = verifySessionToken(token);
   if (!session) return null;
 
-  const user = await prisma.user.findUnique({ where: { id: session.userId } });
-  // Un compte désactivé perd l'accès immédiatement, même avec un cookie encore valide.
-  if (!user || !user.active) return null;
+  const user = await prisma.user.findUnique({
+    where: { id: session.userId },
+    include: { organization: { select: { active: true } } },
+  });
+  // Un compte désactivé, ou une organisation suspendue (facture impayée,
+  // §15/M11), perd l'accès immédiatement, même avec un cookie encore valide.
+  if (!user || !user.active || !user.organization.active) return null;
 
   return {
     id: user.id,
@@ -95,18 +99,24 @@ export class NoBureauSelectedError extends Error {
   }
 }
 
+export const ACTIVE_BUREAU_COOKIE_NAME = "opsdesk_active_bureau";
+
 /**
  * Résout le bureau dans lequel agit l'utilisateur courant : le sien s'il est
- * rattaché à un seul bureau, sinon le bureau explicitement sélectionné (pour
- * un utilisateur org-wide — bureauId = null) via `explicitBureauId` — même
- * mécanique que le sélecteur `?userId=` déjà existant pour qu'un ADMIN
- * consulte la caisse d'un autre utilisateur, généralisée en `?bureauId=`
- * (voir IMPLEMENTATION.md §15). Le sélecteur d'écran (cookie `activeBureauId`
- * + garde-fou "ce bureau appartient bien à mon organisation") arrive avec
- * M10 ; cette aide ne fait que centraliser la règle de résolution.
+ * rattaché à un seul bureau (prioritaire, un utilisateur de bureau ne choisit
+ * jamais). Sinon (utilisateur org-wide, `bureauId = null`) : `explicitBureauId`
+ * s'il est fourni (ex. `?bureauId=` du tableau de bord), sinon le bureau actif
+ * mémorisé dans le cookie `opsdesk_active_bureau` (posé par le sélecteur de
+ * bureau de la sidebar, §15/M10). Sans aucune des deux, lève — un utilisateur
+ * org-wide doit explicitement choisir un bureau avant d'agir dessus.
  */
-export function requireBureauId(user: CurrentUser, explicitBureauId?: string | null): string {
+export async function requireBureauId(user: CurrentUser, explicitBureauId?: string | null): Promise<string> {
   if (user.bureauId) return user.bureauId;
   if (explicitBureauId) return explicitBureauId;
+
+  const cookieStore = await cookies();
+  const active = cookieStore.get(ACTIVE_BUREAU_COOKIE_NAME)?.value;
+  if (active) return active;
+
   throw new NoBureauSelectedError();
 }

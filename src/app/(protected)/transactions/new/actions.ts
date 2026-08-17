@@ -38,7 +38,7 @@ export interface ClientSearchResult {
 
 export async function searchClientsAction(query: string): Promise<ClientSearchResult[]> {
   const user = await requireUser();
-  const bureauId = requireBureauId(user);
+  const bureauId = await requireBureauId(user);
   const trimmed = query.trim();
   if (trimmed.length < 2) return [];
 
@@ -64,7 +64,7 @@ export async function searchClientsAction(query: string): Promise<ClientSearchRe
  */
 export async function getRecentSendersForClientAction(clientId: string): Promise<string[]> {
   const user = await requireUser();
-  const bureauId = requireBureauId(user);
+  const bureauId = await requireBureauId(user);
   if (!clientId) return [];
 
   const rows = await prisma.transaction.findMany({
@@ -124,7 +124,7 @@ export async function createTransactionAction(
 ): Promise<CreateTransactionState> {
   const user = await requireUser();
   requireRole(user, [...CREATE_TRANSACTION_ROLES]);
-  const bureauId = requireBureauId(user);
+  const bureauId = await requireBureauId(user);
 
   const channel = String(formData.get("channel") ?? "") as Channel;
   const senderName = String(formData.get("senderName") ?? "").trim();

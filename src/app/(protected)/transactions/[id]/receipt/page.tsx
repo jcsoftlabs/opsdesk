@@ -3,7 +3,6 @@ import { requireUserOrRedirect, requireBureauId } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { ReceiptTicket, type ReceiptData } from "@/components/ReceiptTicket";
 import { PrintButton } from "@/components/PrintButton";
-import { COMPANY_WHATSAPP_NUMBER } from "@/lib/company";
 
 const CHANNEL_LABEL: Record<string, string> = {
   ZELLE: "Zelle",
@@ -14,13 +13,16 @@ const CHANNEL_LABEL: Record<string, string> = {
 
 export default async function ReceiptPage({ params }: { params: Promise<{ id: string }> }) {
   const user = await requireUserOrRedirect();
-  const bureauId = requireBureauId(user);
+  const bureauId = await requireBureauId(user);
   const { id } = await params;
 
-  const transaction = await prisma.transaction.findUnique({
-    where: { id },
-    include: { client: true, collectedBy: true, createdBy: { select: { fullName: true } } },
-  });
+  const [transaction, organization] = await Promise.all([
+    prisma.transaction.findUnique({
+      where: { id },
+      include: { client: true, collectedBy: true, createdBy: { select: { fullName: true } } },
+    }),
+    prisma.organization.findUniqueOrThrow({ where: { id: user.organizationId } }),
+  ]);
   if (!transaction || transaction.bureauId !== bureauId) notFound();
 
   const data: ReceiptData = {
@@ -42,6 +44,8 @@ export default async function ReceiptPage({ params }: { params: Promise<{ id: st
     netPayout: transaction.netPayout.toString(),
     payoutCurrency: transaction.payoutCurrency,
     cashierFullName: transaction.createdBy.fullName,
+    companyName: organization.name,
+    companyPhone: organization.phone,
   };
 
   const recapText = [
@@ -50,9 +54,13 @@ export default async function ReceiptPage({ params }: { params: Promise<{ id: st
     `Montant remis : ${transaction.netPayout.toString()} ${transaction.payoutCurrency}`,
   ].join("\n");
 
+  // Numéro de secours si le bénéficiaire n'en a pas : premier numéro trouvé
+  // dans le téléphone affiché de l'entreprise (peut lister plusieurs numéros
+  // séparés par "/", ex. "+509 34 40 3636 / 36 00 1818").
+  const companyWhatsappNumber = organization.phone?.split("/")[0]?.replace(/[^0-9+]/g, "") ?? "";
   const whatsappNumber = transaction.client.phone
     ? transaction.client.phone.replace(/[^0-9+]/g, "")
-    : COMPANY_WHATSAPP_NUMBER;
+    : companyWhatsappNumber;
   const whatsappUrl = `https://wa.me/${whatsappNumber}?text=${encodeURIComponent(recapText)}`;
 
   return (

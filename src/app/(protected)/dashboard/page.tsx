@@ -81,7 +81,7 @@ export default async function DashboardPage({
 }) {
   const user = await requireUserOrRedirect();
   const sp = await searchParams;
-  const bureauId = requireBureauId(user, sp.bureauId);
+  const bureauId = await requireBureauId(user, sp.bureauId);
   const isSupervisorOrAdmin = user.role === "SUPERVISOR" || user.role === "ADMIN";
 
   const statusFilter = sp.status && ["RECEIVED", "VERIFIED", "PAID", "CANCELLED"].includes(sp.status)

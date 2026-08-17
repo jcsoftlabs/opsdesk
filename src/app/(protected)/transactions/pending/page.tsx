@@ -19,7 +19,7 @@ const AMOUNT_FORMATTER = new Intl.NumberFormat("fr-FR", { minimumFractionDigits:
 
 export default async function PendingTransactionsPage() {
   const user = await requireRoleOrRedirect(["CASHIER", "SUPERVISOR", "ADMIN"]);
-  const bureauId = requireBureauId(user);
+  const bureauId = await requireBureauId(user);
 
   const [received, verified, openSession] = await Promise.all([
     prisma.transaction.findMany({

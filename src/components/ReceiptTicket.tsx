@@ -1,4 +1,3 @@
-import { COMPANY_NAME, COMPANY_PHONE_DISPLAY } from "@/lib/company";
 import { ID_TYPE_LABEL } from "@/lib/idType";
 
 const CHANNEL_LABEL: Record<string, string> = {
@@ -30,14 +29,16 @@ export interface ReceiptData {
   netPayout: string;
   payoutCurrency: string;
   cashierFullName: string;
+  companyName: string;
+  companyPhone: string | null;
 }
 
 export function ReceiptTicket({ data, copyLabel }: { data: ReceiptData; copyLabel: string }) {
   return (
     <div className="receipt-copy mx-auto w-[80mm] max-w-full border border-dashed border-neutral-300 bg-white p-4 font-mono text-xs text-neutral-900">
       <div className="text-center">
-        <p className="font-semibold">{COMPANY_NAME}</p>
-        <p>{COMPANY_PHONE_DISPLAY}</p>
+        <p className="font-semibold">{data.companyName}</p>
+        {data.companyPhone ? <p>{data.companyPhone}</p> : null}
         <p className="mt-1">— {copyLabel} —</p>
       </div>
 

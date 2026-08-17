@@ -29,7 +29,7 @@ export default async function MonthlyReportPage({
   searchParams: Promise<{ month?: string }>;
 }) {
   const user = await requireRoleOrRedirect(["SUPERVISOR", "ADMIN"]);
-  const bureauId = requireBureauId(user);
+  const bureauId = await requireBureauId(user);
   const { month: monthParam } = await searchParams;
   const { year, month } = parseMonthParam(monthParam);
 

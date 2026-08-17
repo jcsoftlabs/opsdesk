@@ -20,7 +20,7 @@ export async function openCashSessionAction(
 ): Promise<OpenCashSessionState> {
   const user = await requireUser();
   requireRole(user, ["ADMIN"]);
-  const bureauId = requireBureauId(user);
+  const bureauId = await requireBureauId(user);
 
   const existing = await prisma.cashSession.findFirst({ where: { bureauId, status: "OPEN" } });
   if (existing) return { error: "Une caisse commune est déjà ouverte." };
@@ -95,7 +95,7 @@ export async function closeCashSessionAction(
 ): Promise<CloseCashSessionState> {
   const user = await requireUser();
   requireRole(user, ["ADMIN"]);
-  const bureauId = requireBureauId(user);
+  const bureauId = await requireBureauId(user);
 
   const cashSessionId = String(formData.get("cashSessionId") ?? "");
   const session = await prisma.cashSession.findUnique({ where: { id: cashSessionId } });
@@ -168,7 +168,7 @@ export async function addCashTopUpAction(
 ): Promise<AddTopUpState> {
   const user = await requireUser();
   requireRole(user, ["ADMIN"]);
-  const bureauId = requireBureauId(user);
+  const bureauId = await requireBureauId(user);
 
   const currency = String(formData.get("currency") ?? "");
   const amountRaw = String(formData.get("amount") ?? "").trim();

@@ -5,7 +5,7 @@ import { createUserAction, type CreateUserState } from "./actions";
 
 const initialState: CreateUserState = {};
 
-export function CreateUserForm() {
+export function CreateUserForm({ bureaux }: { bureaux: { id: string; name: string }[] }) {
   const [state, formAction, pending] = useActionState(createUserAction, initialState);
 
   return (
@@ -49,6 +49,26 @@ export function CreateUserForm() {
             <option value="ADMIN">Administrateur</option>
           </select>
         </div>
+        {bureaux.length > 1 ? (
+          <div>
+            <label htmlFor="bureauId" className="block text-xs font-medium text-neutral-600">
+              Bureau
+            </label>
+            <select
+              id="bureauId"
+              name="bureauId"
+              defaultValue={bureaux[0]?.id ?? ""}
+              className="mt-1 rounded border border-neutral-300 bg-white px-2 py-1.5 text-sm text-neutral-900"
+            >
+              {bureaux.map((b) => (
+                <option key={b.id} value={b.id}>
+                  {b.name}
+                </option>
+              ))}
+              <option value="">Tous les bureaux (org-wide)</option>
+            </select>
+          </div>
+        ) : null}
         <button
           type="submit"
           disabled={pending}

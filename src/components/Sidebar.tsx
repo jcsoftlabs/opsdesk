@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { logoutAction } from "@/app/login/actions";
+import { setActiveBureauAction } from "@/app/(protected)/actions";
 import type { CurrentUser } from "@/lib/auth";
 
 const ROLE_LABEL: Record<CurrentUser["role"], string> = {
@@ -73,9 +74,24 @@ const NAV_ICONS = {
       />
     </svg>
   ),
+  bureaux: (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="h-5 w-5">
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        d="M3 21h18M5 21V7l7-4 7 4v14M9 21v-6h6v6M9 11h.01M15 11h.01M9 15h.01M15 15h.01"
+      />
+    </svg>
+  ),
 };
 
-export function Sidebar({ user }: { user: CurrentUser }) {
+interface SidebarProps {
+  user: CurrentUser;
+  bureaux: { id: string; name: string }[];
+  activeBureauId: string | null;
+}
+
+export function Sidebar({ user, bureaux, activeBureauId }: SidebarProps) {
   const pathname = usePathname();
   const navItems = [
     { href: "/dashboard", label: "Tableau de bord", icon: NAV_ICONS.dashboard },
@@ -91,6 +107,7 @@ export function Sidebar({ user }: { user: CurrentUser }) {
     navItems.push(
       { href: "/admin/pricing", label: "Grille tarifaire", icon: NAV_ICONS.pricing },
       { href: "/admin/users", label: "Utilisateurs", icon: NAV_ICONS.users },
+      { href: "/admin/bureaux", label: "Bureaux", icon: NAV_ICONS.bureaux },
       { href: "/admin/audit-log", label: "Journal d'audit", icon: NAV_ICONS.audit },
     );
   }
@@ -125,6 +142,27 @@ export function Sidebar({ user }: { user: CurrentUser }) {
       </nav>
 
       <div className="border-t border-neutral-200 p-3">
+        {!user.bureauId && bureaux.length > 0 ? (
+          <form action={setActiveBureauAction} className="mb-2">
+            <label htmlFor="sidebar-bureau" className="block text-xs font-medium text-neutral-500">
+              Bureau actif
+            </label>
+            <select
+              id="sidebar-bureau"
+              name="bureauId"
+              defaultValue={activeBureauId ?? ""}
+              onChange={(e) => e.currentTarget.form?.requestSubmit()}
+              className="mt-1 w-full rounded border border-neutral-300 bg-white px-2 py-1.5 text-sm text-neutral-900"
+            >
+              <option value="">— Choisir un bureau —</option>
+              {bureaux.map((b) => (
+                <option key={b.id} value={b.id}>
+                  {b.name}
+                </option>
+              ))}
+            </select>
+          </form>
+        ) : null}
         <div className="rounded-md bg-neutral-50 px-3 py-2">
           <p className="truncate text-sm font-medium text-neutral-900">{user.fullName}</p>
           <p className="text-xs text-neutral-500">{ROLE_LABEL[user.role]}</p>

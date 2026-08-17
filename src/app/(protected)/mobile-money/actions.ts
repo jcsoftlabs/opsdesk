@@ -40,7 +40,7 @@ export async function createMobileMoneyOperationAction(
   formData: FormData,
 ): Promise<CreateMobileMoneyOperationState> {
   const user = await requireUser();
-  const bureauId = requireBureauId(user);
+  const bureauId = await requireBureauId(user);
 
   const provider = formData.get("provider") as string;
   const operationType = formData.get("operationType") as string;
