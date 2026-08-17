@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { requireUserOrRedirect } from "@/lib/auth";
+import { requireUserOrRedirect, requireBureauId } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { ID_TYPE_LABEL } from "@/lib/idType";
 
@@ -21,14 +21,15 @@ const STATUS_LABEL: Record<string, string> = {
 const AMOUNT_FORMATTER = new Intl.NumberFormat("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
 export default async function TransactionDetailPage({ params }: { params: Promise<{ id: string }> }) {
-  await requireUserOrRedirect();
+  const user = await requireUserOrRedirect();
+  const bureauId = requireBureauId(user);
   const { id } = await params;
 
   const transaction = await prisma.transaction.findUnique({
     where: { id },
     include: { client: true, collectedBy: true, createdBy: { select: { fullName: true } } },
   });
-  if (!transaction) notFound();
+  if (!transaction || transaction.bureauId !== bureauId) notFound();
 
   const rows: [string, string][] = [
     ["Reçu", transaction.receiptNo],

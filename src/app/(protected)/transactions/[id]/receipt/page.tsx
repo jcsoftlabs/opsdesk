@@ -1,5 +1,5 @@
 import { notFound } from "next/navigation";
-import { requireUserOrRedirect } from "@/lib/auth";
+import { requireUserOrRedirect, requireBureauId } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { ReceiptTicket, type ReceiptData } from "@/components/ReceiptTicket";
 import { PrintButton } from "@/components/PrintButton";
@@ -13,14 +13,15 @@ const CHANNEL_LABEL: Record<string, string> = {
 };
 
 export default async function ReceiptPage({ params }: { params: Promise<{ id: string }> }) {
-  await requireUserOrRedirect();
+  const user = await requireUserOrRedirect();
+  const bureauId = requireBureauId(user);
   const { id } = await params;
 
   const transaction = await prisma.transaction.findUnique({
     where: { id },
     include: { client: true, collectedBy: true, createdBy: { select: { fullName: true } } },
   });
-  if (!transaction) notFound();
+  if (!transaction || transaction.bureauId !== bureauId) notFound();
 
   const data: ReceiptData = {
     receiptNo: transaction.receiptNo,

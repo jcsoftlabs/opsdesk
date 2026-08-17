@@ -1,4 +1,4 @@
-import { requireUserOrRedirect } from "@/lib/auth";
+import { requireUserOrRedirect, requireBureauId } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { startOfDay, addDays, parseDateParam, toDateParam } from "@/lib/businessWeek";
 import { MobileMoneyForm } from "./MobileMoneyForm";
@@ -22,20 +22,22 @@ export default async function MobileMoneyPage({
 }: {
   searchParams: Promise<{ date?: string; provider?: string; operationType?: string }>;
 }) {
-  await requireUserOrRedirect();
+  const user = await requireUserOrRedirect();
+  const bureauId = requireBureauId(user);
   const { date: dateParam, provider, operationType } = await searchParams;
 
   const day = parseDateParam(dateParam) ?? startOfDay(new Date());
   const dayEnd = addDays(day, 1);
 
   const where = {
+    bureauId,
     createdAt: { gte: day, lt: dayEnd },
     ...(provider ? { provider: provider as "MONCASH" | "NATCASH" } : {}),
     ...(operationType ? { operationType: operationType as "RETRAIT" | "DEPOT" | "TRANSFERT" } : {}),
   };
 
   const [openCashSession, operations] = await Promise.all([
-    prisma.cashSession.findFirst({ where: { status: "OPEN" } }),
+    prisma.cashSession.findFirst({ where: { bureauId, status: "OPEN" } }),
     prisma.mobileMoneyOperation.findMany({
       where,
       include: { createdBy: { select: { fullName: true } } },

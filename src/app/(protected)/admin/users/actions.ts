@@ -84,7 +84,9 @@ export async function deactivateUserAction(
   if (userId === admin.id) return { error: "Vous ne pouvez pas désactiver votre propre compte" };
 
   const target = await prisma.user.findUnique({ where: { id: userId } });
-  if (!target) return { error: "Utilisateur introuvable" };
+  if (!target || target.organizationId !== admin.organizationId) {
+    return { error: "Utilisateur introuvable" };
+  }
 
   await prisma.user.update({ where: { id: userId }, data: { active: false } });
 
@@ -113,7 +115,9 @@ export async function reactivateUserAction(
   if (!userId) return { error: "Utilisateur manquant" };
 
   const target = await prisma.user.findUnique({ where: { id: userId } });
-  if (!target) return { error: "Utilisateur introuvable" };
+  if (!target || target.organizationId !== admin.organizationId) {
+    return { error: "Utilisateur introuvable" };
+  }
 
   await prisma.user.update({ where: { id: userId }, data: { active: true } });
 
@@ -142,7 +146,9 @@ export async function resetPasswordAction(
   if (!userId) return { error: "Utilisateur manquant" };
 
   const target = await prisma.user.findUnique({ where: { id: userId } });
-  if (!target) return { error: "Utilisateur introuvable" };
+  if (!target || target.organizationId !== admin.organizationId) {
+    return { error: "Utilisateur introuvable" };
+  }
 
   const temporaryPassword = generateTemporaryPassword();
   const passwordHash = await argon2.hash(temporaryPassword, { type: argon2.argon2id });

@@ -9,9 +9,10 @@ const DATE_FORMATTER = new Intl.DateTimeFormat("fr-FR", {
 });
 
 export default async function AuditLogPage() {
-  await requireRoleOrRedirect(["ADMIN"]);
+  const user = await requireRoleOrRedirect(["ADMIN"]);
 
   const entries = await prisma.auditLog.findMany({
+    where: { organizationId: user.organizationId },
     orderBy: { createdAt: "desc" },
     take: 200,
     include: { user: { select: { fullName: true, username: true } } },

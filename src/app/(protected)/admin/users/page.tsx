@@ -10,9 +10,10 @@ const ROLE_LABEL: Record<string, string> = {
 };
 
 export default async function AdminUsersPage() {
-  await requireRoleOrRedirect(["ADMIN"]);
+  const admin = await requireRoleOrRedirect(["ADMIN"]);
 
   const users = await prisma.user.findMany({
+    where: { organizationId: admin.organizationId },
     orderBy: { createdAt: "asc" },
     select: { id: true, fullName: true, username: true, role: true, active: true, createdAt: true },
   });

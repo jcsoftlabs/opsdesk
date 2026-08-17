@@ -63,11 +63,12 @@ export async function searchClientsAction(query: string): Promise<ClientSearchRe
  * client, tirés de l'historique des transactions.
  */
 export async function getRecentSendersForClientAction(clientId: string): Promise<string[]> {
-  await requireUser();
+  const user = await requireUser();
+  const bureauId = requireBureauId(user);
   if (!clientId) return [];
 
   const rows = await prisma.transaction.findMany({
-    where: { clientId },
+    where: { clientId, bureauId },
     distinct: ["senderName"],
     select: { senderName: true },
     orderBy: { createdAt: "desc" },
@@ -147,7 +148,7 @@ export async function createTransactionAction(
 
   if (existingClientId) {
     const client = await prisma.client.findUnique({ where: { id: existingClientId } });
-    if (!client) return { error: "Bénéficiaire introuvable" };
+    if (!client || client.bureauId !== bureauId) return { error: "Bénéficiaire introuvable" };
     clientId = client.id;
   } else {
     const clientFullName = String(formData.get("clientFullName") ?? "").trim();

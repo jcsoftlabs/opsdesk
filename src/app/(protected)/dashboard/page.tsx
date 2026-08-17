@@ -1,6 +1,6 @@
 import Link from "next/link";
 import Decimal from "decimal.js";
-import { requireUserOrRedirect } from "@/lib/auth";
+import { requireUserOrRedirect, requireBureauId } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { computeExpectedTotals } from "@/app/(protected)/cash-session/actions";
 import { addDays, businessWeekRange, mondayOf, parseDateParam, startOfDay, toDateParam } from "@/lib/businessWeek";
@@ -60,6 +60,7 @@ interface DashboardSearchParams {
   channel?: string;
   currency?: string;
   agentId?: string;
+  bureauId?: string;
 }
 
 /** Construit une URL en conservant les filtres actifs, sauf ceux explicitement remplacés. */
@@ -80,6 +81,7 @@ export default async function DashboardPage({
 }) {
   const user = await requireUserOrRedirect();
   const sp = await searchParams;
+  const bureauId = requireBureauId(user, sp.bureauId);
   const isSupervisorOrAdmin = user.role === "SUPERVISOR" || user.role === "ADMIN";
 
   const statusFilter = sp.status && ["RECEIVED", "VERIFIED", "PAID", "CANCELLED"].includes(sp.status)
@@ -115,10 +117,15 @@ export default async function DashboardPage({
 
   const [agents, transactions, kpiTransactions, activeRates, openSession] = await Promise.all([
     isSupervisorOrAdmin
-      ? prisma.user.findMany({ where: { active: true }, select: { id: true, fullName: true }, orderBy: { fullName: "asc" } })
+      ? prisma.user.findMany({
+          where: { active: true, bureauId },
+          select: { id: true, fullName: true },
+          orderBy: { fullName: "asc" },
+        })
       : Promise.resolve([]),
     prisma.transaction.findMany({
       where: {
+        bureauId,
         createdAt: { gte: rangeFrom, lt: rangeTo },
         ...(statusFilter ? { status: statusFilter } : {}),
         ...(channelFilter ? { channel: channelFilter } : {}),
@@ -132,6 +139,7 @@ export default async function DashboardPage({
     // KPI calculés sur la même plage/filtres, mais indépendamment du filtre de statut affiché.
     prisma.transaction.findMany({
       where: {
+        bureauId,
         createdAt: { gte: rangeFrom, lt: rangeTo },
         ...(channelFilter ? { channel: channelFilter } : {}),
         ...(currencyFilter ? { payoutCurrency: currencyFilter } : {}),
@@ -140,10 +148,10 @@ export default async function DashboardPage({
       select: { status: true, receivedCurrency: true, payoutCurrency: true, amountReceived: true, feeAmount: true, netPayout: true },
     }),
     prisma.pricingRule.findMany({
-      where: { effectiveTo: null, exchangeRate: { not: null } },
+      where: { organizationId: user.organizationId, effectiveTo: null, exchangeRate: { not: null } },
       orderBy: { channel: "asc" },
     }),
-    prisma.cashSession.findFirst({ where: { status: "OPEN" } }),
+    prisma.cashSession.findFirst({ where: { bureauId, status: "OPEN" } }),
   ]);
 
   const notCancelled = kpiTransactions.filter((t) => t.status !== "CANCELLED");

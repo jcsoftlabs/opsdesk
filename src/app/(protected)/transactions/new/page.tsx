@@ -3,9 +3,11 @@ import { prisma } from "@/lib/db";
 import { NewTransactionForm, type ActiveRuleDTO } from "./NewTransactionForm";
 
 export default async function NewTransactionPage() {
-  await requireRoleOrRedirect(["CASHIER", "SUPERVISOR", "ADMIN"]);
+  const user = await requireRoleOrRedirect(["CASHIER", "SUPERVISOR", "ADMIN"]);
 
-  const rules = await prisma.pricingRule.findMany({ where: { effectiveTo: null } });
+  const rules = await prisma.pricingRule.findMany({
+    where: { organizationId: user.organizationId, effectiveTo: null },
+  });
   const activeRules: ActiveRuleDTO[] = rules.map((r) => ({
     channel: r.channel,
     payoutCurrency: r.payoutCurrency,

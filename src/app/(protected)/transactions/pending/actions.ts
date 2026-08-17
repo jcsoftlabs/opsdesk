@@ -16,10 +16,11 @@ export async function verifyTransactionAction(
 ): Promise<SimpleActionState> {
   const user = await requireUser();
   requireRole(user, ["CASHIER", "SUPERVISOR", "ADMIN"]);
+  const bureauId = requireBureauId(user);
 
   const transactionId = String(formData.get("transactionId") ?? "");
   const transaction = await prisma.transaction.findUnique({ where: { id: transactionId } });
-  if (!transaction) return { error: "Transaction introuvable" };
+  if (!transaction || transaction.bureauId !== bureauId) return { error: "Transaction introuvable" };
   if (transaction.status !== "RECEIVED") {
     return { error: "Cette transaction n'est plus en attente de vérification." };
   }
@@ -53,7 +54,7 @@ export async function payTransactionAction(
   const confirmedNetPayout = String(formData.get("confirmedNetPayout") ?? "");
 
   const transaction = await prisma.transaction.findUnique({ where: { id: transactionId } });
-  if (!transaction) return { error: "Transaction introuvable" };
+  if (!transaction || transaction.bureauId !== bureauId) return { error: "Transaction introuvable" };
   if (transaction.status !== "VERIFIED") {
     return { error: "Cette transaction doit être vérifiée avant le paiement." };
   }

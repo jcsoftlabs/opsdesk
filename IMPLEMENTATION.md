@@ -373,7 +373,7 @@ Règles retenues :
 | **M6** ✅ | Rapports, export Excel, écran de grille tarifaire | Le changement de taux n'altère aucune transaction passée — vérifié : l'ancienne règle Zelle→HTG à 133 reste inchangée sur les transactions déjà créées après passage à 135 |
 | **M7** | Import de l'historique Excel, sauvegardes, déploiement Docker, formation | Restauration complète testée sur une machine vierge |
 | **M8** ✅ | Socle SaaS multi-bureaux : schéma Organization/Bureau/PlatformAdmin/Invoice, migration des données Kmat Supply, aides d'authentification (`requireBureauId`) | `tsc`/`build`/tests verts, aucune régression écran malgré le changement de schéma — voir §15 |
-| **M9** | Sweep de scoping : chaque requête Prisma des écrans existants filtrée par bureau/organisation, sélecteur de bureau actif pour les utilisateurs org-wide | Deux bureaux du même propriétaire ne voient jamais les données l'un de l'autre |
+| **M9** ✅ | Sweep de scoping : chaque requête Prisma des écrans existants filtrée par bureau/organisation | Deux bureaux du même propriétaire ne voient jamais les données l'un de l'autre |
 | **M10** | Écrans de gestion Organization/Bureau (créer un bureau, inviter des utilisateurs rattachés à un bureau), sélecteur de bureau dans la sidebar, infos entreprise dynamiques sur le reçu | Un propriétaire peut créer un deuxième bureau et y rattacher un caissier sans intervention technique |
 | **M11** | Console plateforme (`/platform/*`) : créer des organisations, tableau de bord facturation par caisse active, marquer une facture payée, suspension d'accès si impayé | Le nombre de caisses facturées correspond au nombre de bureaux actifs de l'organisation |
 
@@ -409,7 +409,7 @@ Cette activité relève de la réglementation des transferts de fonds en Haïti.
 
 ---
 
-## 15. SaaS multi-bureaux (M8)
+## 15. SaaS multi-bureaux (M8-M9)
 
 **Confirmé par le client (2026-08-16).** OpsDesk devient vendable à d'autres maisons de transfert. Un propriétaire (`Organization`) peut posséder plusieurs bureaux (`Bureau`), chacun avec sa propre caisse commune. Facturation **par caisse active** (donc par bureau), suivi interne, encaissement manuel — pas d'intégration de paiement automatisée pour l'instant.
 
@@ -421,4 +421,8 @@ Décisions retenues :
 - **Facturation** : modèle `Invoice` (trace manuelle par organisation, `DUE`/`PAID`, encaissement hors-ligne) et `PlatformAdmin` (toi, opérateur de la plateforme — table entièrement séparée du modèle tenant, session et login distincts sous `/platform/*`, pour qu'une session plateforme ne puisse jamais être confondue avec une session tenant).
 - **Migration technique** : comme pour les migrations précédentes de ce repo, le binaire `schema-engine` de Prisma ne peut pas atteindre la base Railway depuis cette machine — les migrations SQL sont appliquées directement via `node`+`pg`, puis enregistrées dans `_prisma_migrations` pour rester compatibles avec `prisma migrate deploy` en CI/déploiement.
 
-**Livré (M8)** : schéma, migration + backfill Kmat Supply, aide `requireBureauId()` dans `src/lib/auth.ts`, et tous les points d'écriture (`create()`) mis à jour pour rester compilables — sans changement de comportement visible (un seul bureau existe, donc tout fonctionne exactement comme avant). **Pas encore livré (M9)** : le filtrage systématique des lectures (`findMany`/`findFirst`) par bureau sur les écrans existants — sans impact tant qu'un seul bureau existe, mais nécessaire avant qu'un deuxième bureau soit créé, sous peine de fuite de données entre bureaux.
+**Livré (M8)** : schéma, migration + backfill Kmat Supply, aide `requireBureauId()` dans `src/lib/auth.ts`, et tous les points d'écriture (`create()`) mis à jour pour rester compilables — sans changement de comportement visible (un seul bureau existe, donc tout fonctionne exactement comme avant).
+
+**Livré (M9)** : filtrage systématique de toutes les lectures (`findMany`/`findFirst`) par bureau ou organisation sur les 15 écrans existants (tableau de bord, rapports journalier/hebdomadaire/mensuel, caisse, registre MonCash/NatCash, transactions, administration). Au passage, plusieurs points de lecture par identifiant (`findUnique({ where: { id } })` sans vérifier le bureau/l'organisation du demandeur) ont été corrigés — sans le sweep ils auraient permis à un utilisateur d'un bureau d'agir sur une transaction, un utilisateur ou une session de caisse d'un **autre** bureau/organisation en devinant ou en réutilisant un identifiant : vérification/paiement de transaction, clôture de caisse, gestion des comptes utilisateurs (désactiver/réactiver/réinitialiser un mot de passe), consultation du détail ou du reçu d'une transaction. Comme un seul bureau existe encore aujourd'hui, cela ne changeait rien à l'usage réel — mais c'était une vraie faille de cloisonnement, maintenant fermée avant qu'un deuxième bureau existe.
+
+**Pas encore livré (M10)** : le sélecteur de bureau actif pour les utilisateurs "org-wide" (`bureauId = null`) — `requireBureauId()` accepte déjà un `bureauId` explicite (via `?bureauId=`, même mécanique que le sélecteur `?userId=` existant pour la caisse), mais aucun écran ne l'expose encore ; un utilisateur org-wide obtiendrait aujourd'hui une erreur en l'absence de sélection. Aucun utilisateur réel de ce type n'existe pour l'instant (les deux comptes Kmat Supply sont rattachés à leur bureau), donc sans impact immédiat.

@@ -1,6 +1,6 @@
 import Link from "next/link";
 import Decimal from "decimal.js";
-import { requireRoleOrRedirect } from "@/lib/auth";
+import { requireRoleOrRedirect, requireBureauId } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { getReferenceRateAt } from "@/lib/referenceRate";
 import { computeReportMetrics } from "@/lib/reportMetrics";
@@ -28,7 +28,8 @@ export default async function MonthlyReportPage({
 }: {
   searchParams: Promise<{ month?: string }>;
 }) {
-  await requireRoleOrRedirect(["SUPERVISOR", "ADMIN"]);
+  const user = await requireRoleOrRedirect(["SUPERVISOR", "ADMIN"]);
+  const bureauId = requireBureauId(user);
   const { month: monthParam } = await searchParams;
   const { year, month } = parseMonthParam(monthParam);
 
@@ -39,12 +40,12 @@ export default async function MonthlyReportPage({
 
   const [transactions, referenceRate, closedSessions] = await Promise.all([
     prisma.transaction.findMany({
-      where: { createdAt: { gte: monthStart, lt: monthEnd } },
+      where: { bureauId, createdAt: { gte: monthStart, lt: monthEnd } },
       include: { createdBy: { select: { id: true, fullName: true } } },
     }),
-    getReferenceRateAt(monthEnd),
+    getReferenceRateAt(user.organizationId, monthEnd),
     prisma.cashSession.findMany({
-      where: { status: "CLOSED", closedAt: { gte: monthStart, lt: monthEnd } },
+      where: { bureauId, status: "CLOSED", closedAt: { gte: monthStart, lt: monthEnd } },
     }),
   ]);
 

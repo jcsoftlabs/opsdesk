@@ -1,4 +1,4 @@
-import { requireUserOrRedirect } from "@/lib/auth";
+import { requireUserOrRedirect, requireBureauId } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { computeExpectedTotals } from "./actions";
 import { OpenCashSessionForm } from "./OpenCashSessionForm";
@@ -27,10 +27,11 @@ const REASON_LABEL: Record<string, string> = {
 
 export default async function CashSessionPage() {
   const user = await requireUserOrRedirect();
+  const bureauId = requireBureauId(user);
   const isAdmin = user.role === "ADMIN";
 
   const openSession = await prisma.cashSession.findFirst({
-    where: { status: "OPEN" },
+    where: { bureauId, status: "OPEN" },
     include: { openedBy: { select: { fullName: true } } },
   });
 
@@ -45,7 +46,7 @@ export default async function CashSessionPage() {
   const expected = openSession ? await computeExpectedTotals(openSession.id) : null;
 
   const history = await prisma.cashSession.findMany({
-    where: { status: "CLOSED" },
+    where: { bureauId, status: "CLOSED" },
     include: { openedBy: { select: { fullName: true } } },
     orderBy: { closedAt: "desc" },
     take: 20,

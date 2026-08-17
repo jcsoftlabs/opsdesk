@@ -6,14 +6,14 @@ import { ReferenceRateForm } from "./ReferenceRateForm";
 export const dynamic = "force-dynamic";
 
 export default async function AdminPricingPage() {
-  await requireRoleOrRedirect(["ADMIN"]);
+  const user = await requireRoleOrRedirect(["ADMIN"]);
 
   const [rules, referenceRate] = await Promise.all([
     prisma.pricingRule.findMany({
-      where: { effectiveTo: null },
+      where: { organizationId: user.organizationId, effectiveTo: null },
       orderBy: [{ channel: "asc" }, { payoutCurrency: "asc" }],
     }),
-    prisma.referenceRate.findFirst({ where: { effectiveTo: null } }),
+    prisma.referenceRate.findFirst({ where: { organizationId: user.organizationId, effectiveTo: null } }),
   ]);
 
   const ruleDtos: PricingRuleDTO[] = rules.map((r) => ({

@@ -1,6 +1,6 @@
 import Link from "next/link";
 import Decimal from "decimal.js";
-import { requireRoleOrRedirect } from "@/lib/auth";
+import { requireRoleOrRedirect, requireBureauId } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { getReferenceRateAt } from "@/lib/referenceRate";
 import { computeReportMetrics } from "@/lib/reportMetrics";
@@ -27,7 +27,8 @@ export default async function DailyReportPage({
 }: {
   searchParams: Promise<{ date?: string }>;
 }) {
-  await requireRoleOrRedirect(["SUPERVISOR", "ADMIN"]);
+  const user = await requireRoleOrRedirect(["SUPERVISOR", "ADMIN"]);
+  const bureauId = requireBureauId(user);
   const { date: dateParam } = await searchParams;
 
   const day = parseDateParam(dateParam);
@@ -38,14 +39,14 @@ export default async function DailyReportPage({
 
   const [transactions, closedSessions, referenceRate] = await Promise.all([
     prisma.transaction.findMany({
-      where: { createdAt: { gte: dayStart, lt: dayEnd } },
+      where: { bureauId, createdAt: { gte: dayStart, lt: dayEnd } },
       include: { createdBy: { select: { fullName: true } }, client: { select: { fullName: true } } },
       orderBy: { createdAt: "asc" },
     }),
     prisma.cashSession.findMany({
-      where: { status: "CLOSED", closedAt: { gte: dayStart, lt: dayEnd } },
+      where: { bureauId, status: "CLOSED", closedAt: { gte: dayStart, lt: dayEnd } },
     }),
-    getReferenceRateAt(dayEnd),
+    getReferenceRateAt(user.organizationId, dayEnd),
   ]);
 
   const metrics = computeReportMetrics(

@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { requireRoleOrRedirect } from "@/lib/auth";
+import { requireRoleOrRedirect, requireBureauId } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { CashSessionBanner } from "@/components/CashSessionBanner";
 import { VerifyButton } from "./VerifyButton";
@@ -19,20 +19,21 @@ const AMOUNT_FORMATTER = new Intl.NumberFormat("fr-FR", { minimumFractionDigits:
 
 export default async function PendingTransactionsPage() {
   const user = await requireRoleOrRedirect(["CASHIER", "SUPERVISOR", "ADMIN"]);
+  const bureauId = requireBureauId(user);
 
   const [received, verified, openSession] = await Promise.all([
     prisma.transaction.findMany({
-      where: { status: "RECEIVED" },
+      where: { bureauId, status: "RECEIVED" },
       include: { client: { select: { fullName: true } } },
       orderBy: { createdAt: "asc" },
     }),
     prisma.transaction.findMany({
-      where: { status: "VERIFIED" },
+      where: { bureauId, status: "VERIFIED" },
       include: { client: { select: { fullName: true } } },
       orderBy: { createdAt: "asc" },
     }),
-    // Caisse commune : une seule session partagée, pas une par agent.
-    prisma.cashSession.findFirst({ where: { status: "OPEN" } }),
+    // Caisse commune : une seule session partagée par bureau, pas une par agent.
+    prisma.cashSession.findFirst({ where: { bureauId, status: "OPEN" } }),
   ]);
 
   return (

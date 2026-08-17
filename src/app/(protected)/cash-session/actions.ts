@@ -95,10 +95,11 @@ export async function closeCashSessionAction(
 ): Promise<CloseCashSessionState> {
   const user = await requireUser();
   requireRole(user, ["ADMIN"]);
+  const bureauId = requireBureauId(user);
 
   const cashSessionId = String(formData.get("cashSessionId") ?? "");
   const session = await prisma.cashSession.findUnique({ where: { id: cashSessionId } });
-  if (!session) return { error: "Session de caisse introuvable" };
+  if (!session || session.bureauId !== bureauId) return { error: "Session de caisse introuvable" };
   if (session.status !== "OPEN") return { error: "Cette session est déjà clôturée" };
 
   const countedUsdRaw = String(formData.get("countedUsd") ?? "").trim();
