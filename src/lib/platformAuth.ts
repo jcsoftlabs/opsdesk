@@ -14,6 +14,7 @@ export interface CurrentPlatformAdmin {
   id: string;
   fullName: string;
   email: string;
+  mustChangePassword: boolean;
 }
 
 export async function getCurrentPlatformAdmin(): Promise<CurrentPlatformAdmin | null> {
@@ -23,9 +24,15 @@ export async function getCurrentPlatformAdmin(): Promise<CurrentPlatformAdmin | 
   if (!session) return null;
 
   const admin = await prisma.platformAdmin.findUnique({ where: { id: session.userId } });
-  if (!admin) return null;
+  // Un compte plateforme désactivé perd l'accès immédiatement, même avec un cookie encore valide.
+  if (!admin || !admin.active) return null;
 
-  return { id: admin.id, fullName: admin.fullName, email: admin.email };
+  return {
+    id: admin.id,
+    fullName: admin.fullName,
+    email: admin.email,
+    mustChangePassword: admin.mustChangePassword,
+  };
 }
 
 export async function requirePlatformAdmin(): Promise<CurrentPlatformAdmin> {
@@ -37,6 +44,7 @@ export async function requirePlatformAdmin(): Promise<CurrentPlatformAdmin> {
 export async function requirePlatformAdminOrRedirect(): Promise<CurrentPlatformAdmin> {
   const admin = await getCurrentPlatformAdmin();
   if (!admin) redirect("/platform/login");
+  if (admin.mustChangePassword) redirect("/platform/change-password");
   return admin;
 }
 

@@ -440,3 +440,16 @@ Décisions retenues :
 - Bug de date corrigé pendant la vérification : les dates de période de facture saisies au format `YYYY-MM-DD` glissaient d'un jour à l'affichage (`new Date("2026-08-01")` interprété en UTC minuit puis affiché dans le fuseau local) — corrigé en réutilisant `parseDateParam` de `src/lib/businessWeek.ts` (même classe de bug déjà résolue ailleurs dans ce repo pour les rapports).
 
 Compte plateforme initial créé directement en base (pas d'écran d'auto-inscription, volontairement — un seul opérateur pour l'instant).
+
+### Comblement des manques de la console plateforme (révision 2026-08-17)
+
+Un premier passage sur la console (§ ci-dessus) manquait plusieurs choses qu'un vrai opérateur SaaS demande tôt ou tard. Comblé dans cette révision :
+
+- **Journal d'audit plateforme** (`PlatformAuditLog`, `src/lib/platformAudit.ts`, écran `/platform/audit-log`) : append-only comme `audit_logs` (même trigger, message dédié). Toutes les actions plateforme sont tracées — création/suspension/archivage/modification d'organisation, tarif, facture générée/marquée payée, suspension d'un bureau précis, gestion de l'équipe plateforme.
+- **Gestion de l'équipe plateforme** (`/platform/team`) : créer un autre compte `PlatformAdmin` (mot de passe temporaire affiché une fois), le désactiver/réactiver, réinitialiser son mot de passe. Garde-fou : impossible de désactiver son propre compte (même logique que `/admin/users` côté tenant). `PlatformAdmin` gagne `active` et `mustChangePassword` (défaut `true` — s'applique aussi au compte initial déjà créé, cohérent puisque son mot de passe avait été transmis en clair dans la conversation).
+- **Changement de mot de passe forcé côté plateforme** (`/platform/change-password`, hors du layout protégé comme `/platform/login`, pour la même raison — éviter une boucle de redirection) : mêmes règles que côté tenant (10 caractères minimum, confirmation, `mustChangePassword` levé après coup).
+- **Suspension par bureau, pas seulement par organisation** : `togglePlatformBureauActiveAction` sur l'écran de détail d'une organisation — un client avec plusieurs bureaux dont un seul est en défaut de paiement peut être coupé bureau par bureau (le décompte de facturation ne compte que les bureaux actifs, donc la suspension d'un bureau réduit directement le montant facturable).
+- **Modifier les infos d'une organisation** (nom, téléphone) après création : `updateOrganizationInfoAction`.
+- **Archivage plutôt que suppression** : `Organization.archived` — **jamais de suppression réelle**, les données financières sont conservées (obligations de conservation, §14). Un client parti est simplement retiré de la liste active de la console (onglet "Archivées" séparé), indépendamment de la suspension d'accès (`active`) qui reste le levier pour un impayé temporaire.
+- **Vue d'ensemble** sur `/platform` : organisations actives, bureaux actifs (total), revenu mensuel estimé, montant facturé payé/dû — calculés en direct, pas de table de métriques séparée.
+- **Notifications par e-mail** : **non implémenté**, décision du client (2026-08-17) — nécessite un fournisseur (Resend, SendGrid…) et des identifiants qu'il n'avait pas encore choisis. Le mot de passe temporaire reste affiché une seule fois à l'écran, à communiquer manuellement.

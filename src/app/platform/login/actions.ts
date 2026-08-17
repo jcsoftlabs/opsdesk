@@ -24,7 +24,7 @@ export async function platformLoginAction(
   }
 
   const admin = await prisma.platformAdmin.findUnique({ where: { email } });
-  if (!admin) return { error: GENERIC_ERROR };
+  if (!admin || !admin.active) return { error: GENERIC_ERROR };
 
   const validPassword = await argon2.verify(admin.passwordHash, password);
   if (!validPassword) return { error: GENERIC_ERROR };
@@ -39,7 +39,7 @@ export async function platformLoginAction(
     path: "/",
   });
 
-  redirect("/platform");
+  redirect(admin.mustChangePassword ? "/platform/change-password" : "/platform");
 }
 
 export async function platformLogoutAction(): Promise<void> {

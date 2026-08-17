@@ -3,9 +3,12 @@ import { requirePlatformAdminOrRedirect } from "@/lib/platformAuth";
 import { prisma } from "@/lib/db";
 import {
   ToggleOrganizationActiveButton,
+  ArchiveOrganizationButton,
+  UpdateOrganizationInfoForm,
   UpdateRateForm,
   GenerateInvoiceForm,
   MarkInvoicePaidButton,
+  ToggleBureauActiveButton,
 } from "./OrganizationActions";
 
 export const dynamic = "force-dynamic";
@@ -52,10 +55,25 @@ export default async function OrganizationDetailPage({
           <p className="mt-1 text-sm text-neutral-500">
             {organization.phone ?? "Pas de téléphone renseigné"} · {activeBureauCount} bureau(x)
             actif(s) · {organization.users.length} utilisateur(s)
+            {organization.archived ? " · archivée" : ""}
           </p>
         </div>
-        <ToggleOrganizationActiveButton organizationId={organization.id} active={organization.active} />
+        <div className="flex gap-2">
+          <ArchiveOrganizationButton organizationId={organization.id} archived={organization.archived} />
+          <ToggleOrganizationActiveButton organizationId={organization.id} active={organization.active} />
+        </div>
       </div>
+
+      <section className="rounded-lg border border-neutral-200 bg-white p-5">
+        <h2 className="font-medium text-neutral-900">Informations</h2>
+        <div className="mt-3">
+          <UpdateOrganizationInfoForm
+            organizationId={organization.id}
+            currentName={organization.name}
+            currentPhone={organization.phone ?? ""}
+          />
+        </div>
+      </section>
 
       <section className="rounded-lg border border-neutral-200 bg-white p-5">
         <h2 className="font-medium text-neutral-900">Facturation</h2>
@@ -127,6 +145,7 @@ export default async function OrganizationDetailPage({
             <tr>
               <th className="py-1">Nom</th>
               <th className="py-1">Statut</th>
+              <th className="py-1" />
             </tr>
           </thead>
           <tbody>
@@ -134,6 +153,9 @@ export default async function OrganizationDetailPage({
               <tr key={b.id} className="border-b border-neutral-100 last:border-0">
                 <td className="py-1 text-neutral-900">{b.name}</td>
                 <td className="py-1 text-neutral-700">{b.active ? "Actif" : "Désactivé"}</td>
+                <td className="py-1 text-right">
+                  <ToggleBureauActiveButton bureauId={b.id} active={b.active} />
+                </td>
               </tr>
             ))}
           </tbody>

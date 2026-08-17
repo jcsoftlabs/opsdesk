@@ -1,14 +1,14 @@
 import { redirect } from "next/navigation";
 import { getCurrentPlatformAdmin } from "@/lib/platformAuth";
-import { PlatformLoginForm } from "./PlatformLoginForm";
+import { PlatformChangePasswordForm } from "./PlatformChangePasswordForm";
 
-export default async function PlatformLoginPage() {
+export default async function PlatformChangePasswordPage() {
   const admin = await getCurrentPlatformAdmin();
-  if (admin) redirect(admin.mustChangePassword ? "/platform/change-password" : "/platform");
+  if (!admin) redirect("/platform/login");
 
   return (
     <main className="flex min-h-screen items-center justify-center bg-neutral-100 p-4">
-      <PlatformLoginForm />
+      <PlatformChangePasswordForm forced={admin.mustChangePassword} />
     </main>
   );
 }

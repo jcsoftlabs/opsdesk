@@ -27,12 +27,30 @@ export default async function PlatformLayout({ children }: { children: React.Rea
           >
             Nouvelle organisation
           </Link>
+          <Link
+            href="/platform/team"
+            className="block rounded-md px-3 py-2 text-sm font-medium text-neutral-600 hover:bg-neutral-100 hover:text-neutral-900"
+          >
+            Équipe
+          </Link>
+          <Link
+            href="/platform/audit-log"
+            className="block rounded-md px-3 py-2 text-sm font-medium text-neutral-600 hover:bg-neutral-100 hover:text-neutral-900"
+          >
+            Journal d&apos;audit
+          </Link>
         </nav>
         <div className="border-t border-neutral-200 p-3">
           <div className="rounded-md bg-neutral-50 px-3 py-2">
             <p className="truncate text-sm font-medium text-neutral-900">{admin.fullName}</p>
             <p className="truncate text-xs text-neutral-500">{admin.email}</p>
           </div>
+          <Link
+            href="/platform/change-password"
+            className="mt-2 block rounded-md border border-neutral-300 px-3 py-1.5 text-center text-sm text-neutral-700 hover:bg-neutral-50"
+          >
+            Changer le mot de passe
+          </Link>
           <form action={platformLogoutAction} className="mt-2">
             <button
               type="submit"

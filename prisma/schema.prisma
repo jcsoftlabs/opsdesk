@@ -102,6 +102,10 @@ model Organization {
   billingRatePerBureau Decimal @db.Decimal(18, 2)
 
   active    Boolean  @default(true)
+  // Un client qui part : les données financières sont conservées (§14,
+  // obligations de conservation) — jamais de suppression. "archived" le
+  // retire simplement de la liste active de la console plateforme.
+  archived  Boolean  @default(false)
   createdAt DateTime @default(now())
 
   bureaux       Bureau[]
@@ -171,16 +175,41 @@ model Invoice {
 // src/lib/platformAuth.ts) pour qu'une session plateforme ne puisse jamais
 // être confondue avec une session tenant.
 model PlatformAdmin {
-  id           String @id @default(cuid())
+  id           String  @id @default(cuid())
   fullName     String
-  email        String @unique
+  email        String  @unique
   passwordHash String
+  active       Boolean @default(true)
+
+  mustChangePassword Boolean @default(true)
 
   createdAt DateTime @default(now())
 
-  invoices Invoice[]
+  invoices  Invoice[]
+  auditLogs PlatformAuditLog[]
 
   @@map("platform_admins")
+}
+
+// Journal d'audit de la console plateforme (§15/M11, révision 2026-08-17) :
+// append-only comme audit_logs, pour la même raison — traçer qui a créé,
+// suspendu ou archivé quelle organisation, et quand.
+model PlatformAuditLog {
+  id              String        @id @default(cuid())
+  platformAdminId String
+  platformAdmin   PlatformAdmin @relation(fields: [platformAdminId], references: [id])
+  action          String
+  entityType      String
+  entityId        String
+
+  beforeJson Json?
+  afterJson  Json?
+
+  createdAt DateTime @default(now())
+
+  @@index([entityType, entityId])
+  @@index([platformAdminId, createdAt])
+  @@map("platform_audit_logs")
 }
 
 model User {
