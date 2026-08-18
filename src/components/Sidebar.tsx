@@ -83,6 +83,12 @@ const NAV_ICONS = {
       />
     </svg>
   ),
+  paid: (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="h-5 w-5">
+      <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+      <path strokeLinecap="round" strokeLinejoin="round" d="M8 8V6a2 2 0 012-2h4a2 2 0 012 2v2" />
+    </svg>
+  ),
 };
 
 interface SidebarProps {
@@ -101,7 +107,10 @@ export function Sidebar({ user, bureaux, activeBureauId }: SidebarProps) {
     { href: "/mobile-money", label: "MonCash / NatCash", icon: NAV_ICONS.mobileMoney },
   ];
   if (user.role === "SUPERVISOR" || user.role === "ADMIN") {
-    navItems.push({ href: "/reports", label: "Rapports", icon: NAV_ICONS.reports });
+    navItems.push(
+      { href: "/transactions/paid", label: "Transactions payées", icon: NAV_ICONS.paid },
+      { href: "/reports", label: "Rapports", icon: NAV_ICONS.reports },
+    );
   }
   if (user.role === "ADMIN") {
     navItems.push(
